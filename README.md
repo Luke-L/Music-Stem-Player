@@ -1,9 +1,23 @@
 # About
-This is my Python Stem Player v0.4. created to make it (slightly) easier to understand the different tracks without using a full DAW like Reaper or Ableton. Is it easier? Maybe. 
+This is my Python Stem Player v0.5. created to make it (slightly) easier to understand the different tracks without using a full DAW like Reaper or Ableton. Is it easier? Maybe. 
 
 The program supports .wav and .mp3 files. Ensure your audio files are in one of these formats.
 The program uses threading to handle simultaneous playback of multiple tracks.
 Very basic error handling is included to catch exceptions when loading audio files.
+<details>
+<summary>Attributions</summary>
+<ul>
+<li><a href="https://www.flaticon.com/free-icons/drum" title="drum icons">Drum icons created by Smashicons - Flaticon</a></li>
+<li><a href="https://www.flaticon.com/free-icons/headstock" title="headstock icons">Headstock icons created by Smashicons - Flaticon</a></li>
+<li><a href="https://www.flaticon.com/free-icons/mixer" title="mixer icons">Mixer icons created by Vitaly Gorbachev - Flaticon</a></li>
+<li><a href="https://www.flaticon.com/free-icons/microphone" title="microphone icons">Microphone icons created by sonnycandra - Flaticon</a></li>
+<li><a href="https://www.flaticon.com/free-icons/electric-guitar" title="electric guitar icons">Electric guitar icons created by Yellow Frog Factory - Flaticon</a></li>
+<li><a href="https://www.flaticon.com/free-icons/mixing-table" title="mixing table icons">Mixer icons created by Freepik - Flaticon</a></li>
+<li><a href="https://www.flaticon.com/free-icons/music" title="music icons">Music icons created by Freepik - Flaticon</a></li>
+<li><a href="https://www.flaticon.com/free-icons/radio" title="radio icons">Radio icons created by Freepik - Flaticon</a></li>
+<li><a href="https://www.flaticon.com/free-icons/piano" title="piano icons">Piano icons created by Freepik - Flaticon</a></li>
+</ul>
+</details>
 
 # Before Running
 Install Required Libraries:
@@ -15,7 +29,7 @@ pip install pygame sounddevice soundfile numpy
 * The pydub library requires ffmpeg to be installed on your system. Download it from FFmpeg Downloads and ensure it's added to your system's PATH.
 * The soundfile library requires libsndfile to be installed on your system. For Windows, libsndfile is usually included with soundfile.
 
-Also if you dont have Segoe UI Emoji and cannot install it, you will have to change to a different font ("Apple Color Emoji" on macOS, or "Noto Color Emoji" on Linux) to see the icons for each track. 
+Icons for tracks require specific files instead of emoji. Ensure the location in the program is customized to match your file structure. 
 
 
 # Playback
@@ -26,3 +40,16 @@ There are a few key binds right now to be aware of:
 `L` - Load tracks
 
 `q` - Quit program (broken right now)
+
+# Changelog
+
+- v0.2
+    - added track label and playback slider
+- v0.3
+    - fixed track labeling and some bugs
+- v0.4
+    - added icons for track buttons. These may be broken for users whose system doesnt include certain characters or fonts. 
+- v0.5
+    - Changed icon emojis for image files. 
+    - Made a grid for the tracks to use instead of overflowing offscreen. 
+    - Added timecode display and play/pause button.
