@@ -10,8 +10,8 @@ import numpy as np
 import threading
 import time
 
-# v0.3
-# fixed track labeling and some bugs
+# v0.4
+# added icons for track buttons. These may be broken for users whose system doesnt include certain characters or fonts. 
 
 # Initialize Pygame
 pygame.init()
@@ -32,6 +32,41 @@ audio_thread = None
 stop_event = threading.Event()
 seek_event = threading.Event()
 seek_position = 0
+
+# Mapping of track types to icons (simple symbols or letters)
+track_type_icons = {
+    'guitar': '🎸',
+    'bass': '🎸',
+    'drums': '🥁',
+    'percussion': '🥁',
+    'piano': '🎹',
+    'synth': '🎹',
+    'instrum': '🎶',
+    'vocals': '🎤',
+    'other': '♪',
+}
+
+def get_track_type(filename):
+    """Determine the track type based on keywords in the filename."""
+    filename_lower = filename.lower()
+    if 'guitar' in filename_lower:
+        return 'guitar'
+    elif 'bass' in filename_lower:
+        return 'bass'
+    elif 'drums' in filename_lower:
+        return 'drums'
+    elif 'percussion' in filename_lower:
+        return 'percussion'
+    elif 'piano' in filename_lower:
+        return 'piano'
+    elif 'synth' in filename_lower:
+        return 'synth'
+    elif 'instrum' in filename_lower:
+        return 'instrum'
+    elif 'vocals' in filename_lower:
+        return 'vocals'
+    else:
+        return 'other'
 
 def load_sound_files():
     """Function to load sound files using a file dialog."""
@@ -61,7 +96,13 @@ def load_sound_files():
             # Replace hyphens with spaces and underscores with line breaks
             label = label.replace('-', ' ')
             label = label.replace('_', '\n')
-            tracks.append({'data': data, 'samplerate': samplerate, 'label': label})
+            track_type = get_track_type(label)
+            tracks.append({
+                'data': data,
+                'samplerate': samplerate,
+                'label': label,
+                'type': track_type,
+            })
             mute_flags.append(False)  # Initially, all tracks are unmuted
             if duration > max_duration:
                 max_duration = duration
@@ -97,6 +138,14 @@ def draw_tracks():
             color = (200, 200, 200)
         pygame.draw.rect(screen, color, rect)
 
+        # Draw icon
+        icon_char = track_type_icons.get(track['type'], '?')
+        icon_font_size = 48
+        icon_font = pygame.font.SysFont('Segoe UI Emoji', icon_font_size)
+        icon_text = icon_font.render(icon_char, True, (0, 0, 0))
+        icon_rect = icon_text.get_rect(center=(x + box_width // 2, y + icon_font_size))
+        screen.blit(icon_text, icon_rect)
+
         # Prepare label
         label = track['label']
         lines = label.split('\n')
@@ -111,7 +160,8 @@ def draw_tracks():
             too_wide = any(text.get_width() > box_width - 10 for text in text_surfaces)
             # Check if total text height is too tall
             total_text_height = sum(text.get_height() for text in text_surfaces)
-            if too_wide or total_text_height > box_height - 10:
+            total_height = total_text_height + icon_font_size + 10  # Include icon height
+            if too_wide or total_height > box_height - 10:
                 font_size -= 1
                 if font_size < min_font_size:
                     break  # Cannot reduce font size further
@@ -120,8 +170,8 @@ def draw_tracks():
             else:
                 break
 
-        # Calculate starting y-coordinate to center the text vertically
-        current_y = y + (box_height - total_text_height) // 2
+        # Calculate starting y-coordinate to place the label below the icon
+        current_y = icon_rect.bottom + 5
         for text in text_surfaces:
             text_rect = text.get_rect(centerx=x + box_width // 2, y=current_y)
             screen.blit(text, text_rect)
