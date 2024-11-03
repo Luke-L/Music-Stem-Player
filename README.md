@@ -53,3 +53,5 @@ There are a few key binds right now to be aware of:
     - Changed icon emojis for image files. 
     - Made a grid for the tracks to use instead of overflowing offscreen. 
     - Added timecode display and play/pause button.
+- v0.6
+    - Fixed audio stuttering/skipping issue due to the playback_position being updated both in the audio callback and in the main loop.

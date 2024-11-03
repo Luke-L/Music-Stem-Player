@@ -10,8 +10,8 @@ import numpy as np
 import threading
 import time
 
-# v0.5
-# Changed icon emojis for image files. Made a grid for the tracks to use instead of overflowing offscreen. Added timecode display and play/pause button.
+# v0.6
+# Fixed stuttering audio issue
 
 # Initialize Pygame
 pygame.init()
@@ -384,12 +384,6 @@ while running:
                     if 'rect' in track and track['rect'].collidepoint(pos):
                         # Toggle mute
                         mute_flags[i] = not mute_flags[i]
-
-    if playing:
-        playback_position += delta_time
-        if playback_position >= total_duration:
-            playback_position = total_duration
-            playing = False
 
     screen.fill((50, 50, 50))
     draw_menu_bar()
