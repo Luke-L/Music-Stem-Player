@@ -9,8 +9,8 @@ import soundfile as sf
 import numpy as np
 import threading
 
-# v0.7
-# Adjusted UI elements and window size. changed track icon names to all match
+# v0.8
+# Function to remove common pattern from imported filenames, cleaned up and displayed as Title. 
 
 # Initialize Pygame
 pygame.init()
@@ -31,6 +31,9 @@ audio_thread = None
 stop_event = threading.Event()
 seek_event = threading.Event()
 seek_position = 0
+
+# Common artist and track name
+artist_track_name = ""
 
 # Mapping of track types to icon image filenames
 # Adjust the icon_location to point to your icons directory
@@ -81,9 +84,29 @@ def get_track_type(filename):
     else:
         return 'other'
 
+def find_common_pattern(filenames):
+    """Find the common prefix in the list of filenames."""
+    if not filenames:
+        return ""
+    # Extract base names without extensions
+    bases = [os.path.splitext(os.path.basename(f))[0] for f in filenames]
+    # Replace hyphens and underscores with spaces
+    bases = [b.replace('-', ' ').replace('_', ' ') for b in bases]
+    # Split into words
+    split_names = [b.split() for b in bases]
+    # Find common words
+    common_words = set(split_names[0])
+    for name in split_names[1:]:
+        common_words.intersection_update(name)
+    # Sort common words in the order they appear in the first filename
+    common_words_in_order = [word for word in split_names[0] if word in common_words]
+    # Join back into a string
+    common_pattern = ' '.join(common_words_in_order)
+    return common_pattern
+
 def load_sound_files():
     """Function to load sound files using a file dialog."""
-    global total_duration, playback_position, playing, tracks, mute_flags, stop_event, audio_thread
+    global total_duration, playback_position, playing, tracks, mute_flags, stop_event, audio_thread, artist_track_name
     root = Tk()
     root.withdraw()  # Hide the root window
     file_paths = filedialog.askopenfilenames(filetypes=[("Audio Files", "*.wav *.mp3 *.flac")])
@@ -98,6 +121,11 @@ def load_sound_files():
     tracks = []
     mute_flags = []
     max_duration = 0
+
+    # Find common pattern among filenames
+    artist_track_name = find_common_pattern(file_paths)
+    artist_track_name_display = artist_track_name.title()
+
     for file_path in file_paths:
         try:
             # Read audio file
@@ -105,10 +133,15 @@ def load_sound_files():
             if len(data.shape) == 1:
                 data = np.expand_dims(data, axis=1)  # Convert mono to stereo
             duration = len(data) / samplerate
-            label = os.path.basename(file_path)
-            # Replace hyphens with spaces and underscores with line breaks
-            label = label.replace('-', ' ')
-            label = label.replace('_', '\n')
+            label = os.path.splitext(os.path.basename(file_path))[0]
+            # Replace hyphens and underscores with spaces
+            label = label.replace('-', ' ').replace('_', ' ')
+            # Remove the common pattern from the label
+            if artist_track_name:
+                label = label.replace(artist_track_name, '').strip()
+            # If label is empty after removing common pattern, use a default label
+            if not label:
+                label = 'Track'
             track_type = get_track_type(label)
             # Load icon image
             icon_path = track_type_icons.get(track_type, os.path.join(icon_location, 'music-notes.png'))
@@ -131,6 +164,16 @@ def load_sound_files():
     total_duration = max_duration
     playback_position = 0  # Reset playback position
     playing = False
+
+def draw_artist_track_name():
+    """Function to draw the artist and track name above the track buttons."""
+    if artist_track_name:
+        # Prepare the display text
+        display_text = artist_track_name.title()
+        font = pygame.font.SysFont(None, 36)
+        text_surface = font.render(display_text, True, (255, 255, 255))
+        text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, MENU_BAR_HEIGHT + 30))
+        screen.blit(text_surface, text_rect)
 
 def draw_menu_bar():
     """Function to draw the top menu bar."""
@@ -184,7 +227,7 @@ def draw_tracks():
     box_height = 150
     padding = 20
     start_x = padding
-    y = MENU_BAR_HEIGHT + 20  # Start below the menu bar
+    y_offset = MENU_BAR_HEIGHT + 70  # Start below the menu bar and artist name
     max_font_size = 24
     min_font_size = 12
     columns = max(1, (SCREEN_WIDTH - padding * 2) // (box_width + padding))
@@ -194,7 +237,7 @@ def draw_tracks():
         row = idx // columns
         col = idx % columns
         x = start_x + col * (box_width + padding)
-        current_y = y + row * (box_height + padding)
+        current_y = y_offset + row * (box_height + padding)
         rect = pygame.Rect(x, current_y, box_width, box_height)
         track['rect'] = rect  # Store rect in track dict
         # Draw background
@@ -215,7 +258,7 @@ def draw_tracks():
         # Adjust font size to fit the text within the box
         font_size = max_font_size
         font = pygame.font.SysFont(None, font_size)
-        text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
+        text_surfaces = [font.render(line.title(), True, (0, 0, 0)) for line in lines]
 
         # Reduce font size if text is too wide or too tall
         while True:
@@ -229,7 +272,7 @@ def draw_tracks():
                 if font_size < min_font_size:
                     break  # Cannot reduce font size further
                 font = pygame.font.SysFont(None, font_size)
-                text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
+                text_surfaces = [font.render(line.title(), True, (0, 0, 0)) for line in lines]
             else:
                 break
 
@@ -381,6 +424,7 @@ while running:
 
     screen.fill((50, 50, 50))
     draw_menu_bar()
+    draw_artist_track_name()
     draw_tracks()
     draw_play_pause_button()
     draw_playback_slider()

@@ -58,3 +58,6 @@ There are a few key binds right now to be aware of:
 - v0.7
     - Adjusted UI elements and window size. 
     - Changed track icon names to be unified formats. 
+- v0.8
+    - Added a new function to find the common pattern among the loaded filenames.
+    - Removed common pattern from track labels, displaying and formatting this pattern as a Title.
