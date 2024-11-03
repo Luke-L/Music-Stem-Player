@@ -8,17 +8,16 @@ import sounddevice as sd
 import soundfile as sf
 import numpy as np
 import threading
-import time
 
-# v0.6
-# Fixed stuttering audio issue
+# v0.7
+# Adjusted UI elements and window size. changed track icon names to all match
 
 # Initialize Pygame
 pygame.init()
 
 # Set up the screen
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 800
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Music Stem Player and Visualizer")
 
@@ -37,12 +36,12 @@ seek_position = 0
 # Adjust the icon_location to point to your icons directory
 icon_location = "C:\\Users\\games\\Documents\\icons"
 track_type_icons = {
-    'guitar': os.path.join(icon_location, 'electric-guitar.png'),
+    'guitar': os.path.join(icon_location, 'guitar-electric.png'),
     'bass': os.path.join(icon_location, 'bass-guitar.png'),
     'drums': os.path.join(icon_location, 'drums.png'),
     'percussion': os.path.join(icon_location, 'drums.png'),
     'piano': os.path.join(icon_location, 'piano-keyboard.png'),
-    'synth': os.path.join(icon_location, 'sound mixer.png'),
+    'synth': os.path.join(icon_location, 'sound-mixer.png'),
     'instrum': os.path.join(icon_location, 'mixing-table.png'),
     'vocals': os.path.join(icon_location, 'microphone.png'),
     'other': os.path.join(icon_location, 'wave-sound.png'),
@@ -50,8 +49,6 @@ track_type_icons = {
 
 # UI Elements
 MENU_BAR_HEIGHT = 40
-BUTTON_WIDTH = 100
-BUTTON_HEIGHT = 30
 PLAY_BUTTON_SIZE = 50
 
 # Load play and pause button images or create simple shapes
@@ -65,7 +62,7 @@ pygame.draw.rect(pause_button_image, (255, 0, 0), (30, 10, 10, 30))
 def get_track_type(filename):
     """Determine the track type based on keywords in the filename."""
     filename_lower = filename.lower()
-    if 'electric-guitar' in filename_lower or 'guitar' in filename_lower:
+    if 'guitar-electric' in filename_lower or 'guitar' in filename_lower:
         return 'guitar'
     elif 'bass-guitar' in filename_lower or 'bass' in filename_lower:
         return 'bass'
@@ -75,7 +72,7 @@ def get_track_type(filename):
         return 'percussion'
     elif 'piano' in filename_lower or 'piano-keyboard' in filename_lower:
         return 'piano'
-    elif 'synth' in filename_lower or 'sound mixer' in filename_lower:
+    elif 'synth' in filename_lower or 'sound-mixer' in filename_lower:
         return 'synth'
     elif 'instrum' in filename_lower or 'mixing-table' in filename_lower:
         return 'instrum'
@@ -142,9 +139,11 @@ def draw_menu_bar():
     # Draw "Load Tracks" button
     font = pygame.font.SysFont(None, 24)
     load_text = font.render("Load Tracks", True, (255, 255, 255))
-    load_button_rect = pygame.Rect(10, 5, BUTTON_WIDTH, BUTTON_HEIGHT)
+    text_width, text_height = load_text.get_size()
+    button_padding = 10
+    load_button_rect = pygame.Rect(10, 5, text_width + button_padding * 2, text_height + button_padding)
     pygame.draw.rect(screen, (100, 100, 100), load_button_rect)
-    screen.blit(load_text, (load_button_rect.x + 10, load_button_rect.y + 5))
+    screen.blit(load_text, (load_button_rect.x + button_padding, load_button_rect.y + button_padding // 2))
     # Store button rect for interaction
     global load_button_rect_global
     load_button_rect_global = load_button_rect
@@ -308,18 +307,13 @@ def play_audio():
                          blocksize=blocksize,
                          callback=audio_callback):
         while not stop_event.is_set():
-            time.sleep(0.1)
+            threading.Event().wait(0.1)
 
     playing = False
 
 running = True
-last_update_time = time.time()
 
 while running:
-    current_time = time.time()
-    delta_time = current_time - last_update_time
-    last_update_time = current_time
-
     for event in pygame.event.get():
         if event.type == QUIT:
             stop_event.set()

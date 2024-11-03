@@ -5,18 +5,18 @@ The program supports .wav and .mp3 files. Ensure your audio files are in one of 
 The program uses threading to handle simultaneous playback of multiple tracks.
 Very basic error handling is included to catch exceptions when loading audio files.
 <details>
-<summary>Attributions</summary>
-<ul>
-<li><a href="https://www.flaticon.com/free-icons/drum" title="drum icons">Drum icons created by Smashicons - Flaticon</a></li>
-<li><a href="https://www.flaticon.com/free-icons/headstock" title="headstock icons">Headstock icons created by Smashicons - Flaticon</a></li>
-<li><a href="https://www.flaticon.com/free-icons/mixer" title="mixer icons">Mixer icons created by Vitaly Gorbachev - Flaticon</a></li>
-<li><a href="https://www.flaticon.com/free-icons/microphone" title="microphone icons">Microphone icons created by sonnycandra - Flaticon</a></li>
-<li><a href="https://www.flaticon.com/free-icons/electric-guitar" title="electric guitar icons">Electric guitar icons created by Yellow Frog Factory - Flaticon</a></li>
-<li><a href="https://www.flaticon.com/free-icons/mixing-table" title="mixing table icons">Mixer icons created by Freepik - Flaticon</a></li>
-<li><a href="https://www.flaticon.com/free-icons/music" title="music icons">Music icons created by Freepik - Flaticon</a></li>
-<li><a href="https://www.flaticon.com/free-icons/radio" title="radio icons">Radio icons created by Freepik - Flaticon</a></li>
-<li><a href="https://www.flaticon.com/free-icons/piano" title="piano icons">Piano icons created by Freepik - Flaticon</a></li>
-</ul>
+    <summary>Attributions</summary>
+    <ul>
+        <li><a href="https://www.flaticon.com/free-icons/drum" title="drum icons">Drum icons created by Smashicons - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/headstock" title="headstock icons">Headstock icons created by Smashicons - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/mixer" title="mixer icons">Mixer icons created by Vitaly Gorbachev - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/microphone" title="microphone icons">Microphone icons created by sonnycandra - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/electric-guitar" title="electric guitar icons">Electric guitar icons created by Yellow Frog Factory - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/mixing-table" title="mixing table icons">Mixer icons created by Freepik - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/music" title="music icons">Music icons created by Freepik - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/radio" title="radio icons">Radio icons created by Freepik - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/piano" title="piano icons">Piano icons created by Freepik - Flaticon</a></li>
+    </ul>
 </details>
 
 # Before Running
@@ -55,3 +55,6 @@ There are a few key binds right now to be aware of:
     - Added timecode display and play/pause button.
 - v0.6
     - Fixed audio stuttering/skipping issue due to the playback_position being updated both in the audio callback and in the main loop.
+- v0.7
+    - Adjusted UI elements and window size. 
+    - Changed track icon names to be unified formats. 
