@@ -4,13 +4,14 @@ import os
 from pygame.locals import *
 from tkinter import Tk
 from tkinter import filedialog
-from pydub import AudioSegment
-from pydub.playback import _play_with_simpleaudio
+import sounddevice as sd
+import soundfile as sf
+import numpy as np
 import threading
 import time
 
-# v0.2
-# added track label and playback slider
+# v0.3
+# fixed track labeling and some bugs
 
 # Initialize Pygame
 pygame.init()
@@ -23,28 +24,50 @@ pygame.display.set_caption("Music Stem Player and Visualizer")
 
 # List to hold the tracks
 tracks = []
-total_duration = 0  # Total duration of the longest track
-playback_position = 0  # Current playback position in milliseconds
+total_duration = 0  # Total duration of the longest track in seconds
+playback_position = 0  # Current playback position in seconds
 playing = False
-play_threads = []
+mute_flags = []
+audio_thread = None
 stop_event = threading.Event()
+seek_event = threading.Event()
+seek_position = 0
 
 def load_sound_files():
     """Function to load sound files using a file dialog."""
-    global total_duration, playback_position, playing
+    global total_duration, playback_position, playing, tracks, mute_flags, stop_event, audio_thread
     root = Tk()
     root.withdraw()  # Hide the root window
-    file_paths = filedialog.askopenfilenames(filetypes=[("Audio Files", "*.wav *.mp3")])
+    file_paths = filedialog.askopenfilenames(filetypes=[("Audio Files", "*.wav *.mp3 *.flac")])
     root.destroy()
+    if not file_paths:
+        return
+    # Stop any ongoing playback
+    if playing:
+        stop_event.set()
+        audio_thread.join()
+        playing = False
+    tracks = []
+    mute_flags = []
+    max_duration = 0
     for file_path in file_paths:
         try:
-            sound = AudioSegment.from_file(file_path)
+            # Read audio file
+            data, samplerate = sf.read(file_path, dtype='float32')
+            if len(data.shape) == 1:
+                data = np.expand_dims(data, axis=1)  # Convert mono to stereo
+            duration = len(data) / samplerate
             label = os.path.basename(file_path)
-            tracks.append({'sound': sound, 'label': label, 'icon': None, 'muted': False})
-            if len(sound) > total_duration:
-                total_duration = len(sound)
+            # Replace hyphens with spaces and underscores with line breaks
+            label = label.replace('-', ' ')
+            label = label.replace('_', '\n')
+            tracks.append({'data': data, 'samplerate': samplerate, 'label': label})
+            mute_flags.append(False)  # Initially, all tracks are unmuted
+            if duration > max_duration:
+                max_duration = duration
         except Exception as e:
             print(f"Could not load sound file {file_path}: {e}")
+    total_duration = max_duration
     playback_position = 0  # Reset playback position
     playing = False
 
@@ -60,22 +83,49 @@ def draw_tracks():
     start_x = (SCREEN_WIDTH - total_width) // 2
     y = (SCREEN_HEIGHT - box_height) // 2 - 50
 
-    font = pygame.font.SysFont(None, 24)
+    max_font_size = 24
+    min_font_size = 12
 
     for i, track in enumerate(tracks):
         x = start_x + i * (box_width + padding)
         rect = pygame.Rect(x, y, box_width, box_height)
         track['rect'] = rect  # Store rect in track dict
         # Draw background
-        if track.get('muted', False):
+        if mute_flags[i]:
             color = (150, 150, 150)  # Gray if muted
         else:
             color = (200, 200, 200)
         pygame.draw.rect(screen, color, rect)
-        # Draw label inside the box
-        text = font.render(track['label'], True, (0, 0, 0))
-        text_rect = text.get_rect(center=(x + box_width // 2, y + box_height // 2))
-        screen.blit(text, text_rect)
+
+        # Prepare label
+        label = track['label']
+        lines = label.split('\n')
+        # Adjust font size to fit the text within the box
+        font_size = max_font_size
+        font = pygame.font.SysFont(None, font_size)
+        text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
+
+        # Reduce font size if text is too wide or too tall
+        while True:
+            # Check if any line is too wide
+            too_wide = any(text.get_width() > box_width - 10 for text in text_surfaces)
+            # Check if total text height is too tall
+            total_text_height = sum(text.get_height() for text in text_surfaces)
+            if too_wide or total_text_height > box_height - 10:
+                font_size -= 1
+                if font_size < min_font_size:
+                    break  # Cannot reduce font size further
+                font = pygame.font.SysFont(None, font_size)
+                text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
+            else:
+                break
+
+        # Calculate starting y-coordinate to center the text vertically
+        current_y = y + (box_height - total_text_height) // 2
+        for text in text_surfaces:
+            text_rect = text.get_rect(centerx=x + box_width // 2, y=current_y)
+            screen.blit(text, text_rect)
+            current_y += text.get_height()
 
 def draw_playback_slider():
     """Function to draw the playback slider at the bottom."""
@@ -96,26 +146,57 @@ def draw_playback_slider():
     global slider_rect
     slider_rect = pygame.Rect(x, y, slider_width, slider_height)
 
-def play_tracks():
-    """Function to play all tracks from the current playback position."""
-    global play_threads, stop_event
-    stop_event.clear()
-    play_threads = []
-    for track in tracks:
-        if not track.get('muted', False):
-            # Slice the sound from the current position
-            sliced_sound = track['sound'][playback_position:]
-            # Play the sliced sound in a separate thread
-            thread = threading.Thread(target=_play_with_simpleaudio, args=(sliced_sound,))
-            thread.start()
-            play_threads.append(thread)
+def audio_callback(outdata, frames, time, status):
+    """Callback function for sounddevice.OutputStream."""
+    global playback_position, total_duration, tracks, mute_flags, stop_event, seek_event, seek_position
+    if status.output_underflow:
+        print('Output underflow: increase blocksize?', file=sys.stderr)
+        raise sd.CallbackAbort
+    if stop_event.is_set():
+        raise sd.CallbackStop
 
-def stop_tracks():
-    """Function to stop all tracks."""
-    global stop_event
-    stop_event.set()
-    # simpleaudio automatically stops when the program exits
-    # Since we can't stop individual playbacks easily, we rely on stop_event
+    if seek_event.is_set():
+        seek_event.clear()
+        playback_position = seek_position
+
+    start_sample = int(playback_position * tracks[0]['samplerate'])
+    end_sample = start_sample + frames
+    data = np.zeros((frames, tracks[0]['data'].shape[1]), dtype='float32')
+
+    for i, track in enumerate(tracks):
+        if not mute_flags[i]:
+            track_data = track['data']
+            track_samples = track_data[start_sample:end_sample]
+            if track_samples.shape[0] < frames:
+                # Pad with zeros if track is shorter
+                padding = np.zeros((frames - track_samples.shape[0], track_samples.shape[1]))
+                track_samples = np.vstack((track_samples, padding))
+            data += track_samples
+
+    # Normalize mixed data to prevent clipping
+    max_amp = np.max(np.abs(data))
+    if max_amp > 1.0:
+        data /= max_amp
+
+    outdata[:] = data
+
+    playback_position += frames / tracks[0]['samplerate']
+    if playback_position >= total_duration:
+        raise sd.CallbackStop
+
+def play_audio():
+    """Function to play audio using sounddevice."""
+    global tracks, playing, playback_position, stop_event, seek_event, seek_position
+    samplerate = tracks[0]['samplerate']
+    blocksize = 1024
+    with sd.OutputStream(channels=tracks[0]['data'].shape[1],
+                         samplerate=samplerate,
+                         blocksize=blocksize,
+                         callback=audio_callback):
+        while not stop_event.is_set():
+            time.sleep(0.1)
+
+    playing = False
 
 running = True
 last_update_time = time.time()
@@ -128,23 +209,32 @@ while running:
     for event in pygame.event.get():
         if event.type == QUIT:
             stop_event.set()
+            if audio_thread and audio_thread.is_alive():
+                audio_thread.join()
             running = False
         elif event.type == KEYDOWN:
             if event.key == K_ESCAPE:
                 stop_event.set()
+                if audio_thread and audio_thread.is_alive():
+                    audio_thread.join()
                 running = False
             elif event.key == K_l:
                 stop_event.set()
-                tracks.clear()
+                if audio_thread and audio_thread.is_alive():
+                    audio_thread.join()
                 load_sound_files()
             elif event.key == K_SPACE:
                 if not playing and total_duration > 0:
                     # Play all tracks
-                    play_tracks()
+                    stop_event.clear()
+                    audio_thread = threading.Thread(target=play_audio)
+                    audio_thread.start()
                     playing = True
                 else:
                     # Stop all tracks
-                    stop_tracks()
+                    stop_event.set()
+                    if audio_thread and audio_thread.is_alive():
+                        audio_thread.join()
                     playing = False
         elif event.type == MOUSEBUTTONDOWN:
             pos = pygame.mouse.get_pos()
@@ -152,24 +242,14 @@ while running:
                 # Calculate new playback position
                 x = pos[0] - slider_rect.x
                 ratio = x / slider_rect.width
-                playback_position = int(total_duration * ratio)
-                if playing:
-                    stop_tracks()
-                    play_tracks()
+                seek_position = total_duration * ratio
+                seek_event.set()
+                playback_position = seek_position
             else:
-                for track in tracks:
+                for i, track in enumerate(tracks):
                     if 'rect' in track and track['rect'].collidepoint(pos):
                         # Toggle mute
-                        track['muted'] = not track.get('muted', False)
-                        if playing:
-                            stop_tracks()
-                            play_tracks()
-
-    if playing:
-        playback_position += delta_time * 1000  # Convert to milliseconds
-        if playback_position >= total_duration:
-            playback_position = total_duration
-            playing = False
+                        mute_flags[i] = not mute_flags[i]
 
     screen.fill((50, 50, 50))
     draw_tracks()
