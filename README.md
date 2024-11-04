@@ -63,3 +63,6 @@ There are a few key binds right now to be aware of:
 - v0.9
     - Added settings button to adjust the visuals of track label and title.
     - Now uses Q to exit the program with a confirm prompt.
+- v1.0
+    - Settings menu `show_full_labels` bug fix 
+    - Cleaning up some redundant or useless code snippets.

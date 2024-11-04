@@ -8,10 +8,9 @@ import sounddevice as sd
 import soundfile as sf
 import numpy as np
 import threading
-import textwrap
 
-# v0.9
-# added settings button with 3 options for displaying track and title. Also can quit with Q key.
+# v1.0
+# bug fix and code tidying up
 
 # Initialize Pygame
 pygame.init()
@@ -39,7 +38,7 @@ artist_track_name = ""
 # Settings
 settings_menu_open = False
 show_title = True
-show_full_labels = True
+show_full_labels = False  # Set to False by default as per your requirement
 use_title_case_labels = True
 
 # Mapping of track types to icon image filenames
@@ -60,6 +59,9 @@ track_type_icons = {
 # UI Elements
 MENU_BAR_HEIGHT = 40
 PLAY_BUTTON_SIZE = 50
+
+# Dictionary to hold UI element rectangles for interaction
+ui_elements = {}
 
 # Load play and pause button images or create simple shapes
 play_button_image = pygame.Surface((PLAY_BUTTON_SIZE, PLAY_BUTTON_SIZE), pygame.SRCALPHA)
@@ -91,25 +93,27 @@ def get_track_type(filename):
     else:
         return 'other'
 
-def find_common_pattern(filenames):
-    """Find the common pattern in the list of filenames."""
+def find_common_words(filenames):
+    """Find the common words in the list of filenames, preserving order."""
     if not filenames:
-        return ""
+        return []
     # Extract base names without extensions
     bases = [os.path.splitext(os.path.basename(f))[0] for f in filenames]
     # Replace hyphens and underscores with spaces
     bases = [b.replace('-', ' ').replace('_', ' ') for b in bases]
     # Split into words
     split_names = [b.split() for b in bases]
-    # Find common words
-    common_words = set(split_names[0])
-    for name in split_names[1:]:
-        common_words.intersection_update(name)
-    # Sort common words in the order they appear in the first filename
-    common_words_in_order = [word for word in split_names[0] if word in common_words]
-    # Join back into a string
-    common_pattern = ' '.join(common_words_in_order)
-    return common_pattern
+    # Convert all words to lowercase for comparison
+    split_names_lower = [[word.lower() for word in words] for words in split_names]
+    # Use the first filename's words as the basis for order
+    first_words = split_names_lower[0]
+    # Initialize common words list
+    common_words = []
+    for idx, word in enumerate(first_words):
+        if all(word in other_words for other_words in split_names_lower[1:]):
+            # Use the original word from the first filename to preserve case
+            common_words.append(split_names[0][idx])
+    return common_words
 
 def load_sound_files():
     """Function to load sound files using a file dialog."""
@@ -129,8 +133,10 @@ def load_sound_files():
     mute_flags = []
     max_duration = 0
 
-    # Find common pattern among filenames
-    artist_track_name = find_common_pattern(file_paths)
+    # Find common words among filenames
+    common_words = find_common_words(file_paths)
+    artist_track_name_words = common_words
+    artist_track_name = ' '.join(artist_track_name_words)
 
     for file_path in file_paths:
         try:
@@ -142,10 +148,14 @@ def load_sound_files():
 
             # Get labels
             full_label = os.path.splitext(os.path.basename(file_path))[0]
-            label_without_common = full_label
-            if artist_track_name:
-                label_without_common = label_without_common.replace(artist_track_name, '').strip()
-            if not label_without_common:
+            # Replace hyphens and underscores with spaces
+            full_label_processed = full_label.replace('-', ' ').replace('_', ' ')
+            # Split into words
+            words = full_label_processed.split()
+            # Remove common words (case-insensitive)
+            label_words = [word for word in words if word.lower() not in [w.lower() for w in artist_track_name_words]]
+            label_without_common = ' '.join(label_words)
+            if not label_without_common.strip():
                 label_without_common = 'Track'
 
             track_type = get_track_type(label_without_common)
@@ -179,6 +189,8 @@ def draw_artist_track_name():
         display_text = artist_track_name
         if use_title_case_labels:
             display_text = display_text.replace('-', ' ').replace('_', ' ').title()
+        else:
+            display_text = display_text.replace('-', ' ').replace('_', ' ')
         font = pygame.font.SysFont(None, 36)
         text_surface = font.render(display_text, True, (255, 255, 255))
         text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, MENU_BAR_HEIGHT + 30))
@@ -204,14 +216,13 @@ def draw_menu_bar():
     settings_text_width, settings_text_height = settings_text.get_size()
     # Position settings button next to load tracks button
     settings_button_x = load_button_rect.right + 10  # 10 pixels gap
-    settings_button_rect = pygame.Rect(settings_button_x, 5, settings_text_width + button_padding * 2, settings_text_height + button_padding)
+    settings_button_rect = pygame.Rect(settings_button_x, 5, settings_text_width + button_padding * 2, load_text_height + button_padding)
     pygame.draw.rect(screen, (100, 100, 100), settings_button_rect)
     screen.blit(settings_text, (settings_button_rect.x + button_padding, settings_button_rect.y + button_padding // 2))
 
     # Store button rects for interaction
-    global load_button_rect_global, settings_button_rect_global
-    load_button_rect_global = load_button_rect
-    settings_button_rect_global = settings_button_rect
+    ui_elements['load_button_rect'] = load_button_rect
+    ui_elements['settings_button_rect'] = settings_button_rect
 
 def draw_settings_menu():
     """Function to draw the settings menu."""
@@ -224,7 +235,6 @@ def draw_settings_menu():
     pygame.draw.rect(screen, (255, 255, 255), (x, y, menu_width, menu_height), 2)  # Border
 
     font = pygame.font.SysFont(None, 24)
-    button_padding = 10
 
     # Option 1: Toggle Title Visibility
     title_text = "Show Title"
@@ -254,10 +264,9 @@ def draw_settings_menu():
     screen.blit(label_case_label, (label_case_checkbox_rect.right + 10, label_case_checkbox_rect.y))
 
     # Store checkbox rects for interaction
-    global title_checkbox_rect_global, full_label_checkbox_rect_global, label_case_checkbox_rect_global
-    title_checkbox_rect_global = title_checkbox_rect
-    full_label_checkbox_rect_global = full_label_checkbox_rect
-    label_case_checkbox_rect_global = label_case_checkbox_rect
+    ui_elements['title_checkbox_rect'] = title_checkbox_rect
+    ui_elements['full_label_checkbox_rect'] = full_label_checkbox_rect
+    ui_elements['label_case_checkbox_rect'] = label_case_checkbox_rect
 
 def draw_play_pause_button():
     """Function to draw the play/pause button."""
@@ -269,8 +278,7 @@ def draw_play_pause_button():
     else:
         screen.blit(play_button_image, (x, y))
     # Store button rect for interaction
-    global play_button_rect_global
-    play_button_rect_global = play_button_rect
+    ui_elements['play_button_rect'] = play_button_rect
 
 def draw_timecode():
     """Function to display the current playback time and total duration."""
@@ -310,10 +318,7 @@ def draw_tracks():
         rect = pygame.Rect(x, current_y, box_width, box_height)
         track['rect'] = rect  # Store rect in track dict
         # Draw background
-        if mute_flags[idx]:
-            color = (150, 150, 150)  # Gray if muted
-        else:
-            color = (200, 200, 200)
+        color = (150, 150, 150) if mute_flags[idx] else (200, 200, 200)
         pygame.draw.rect(screen, color, rect)
 
         # Draw icon
@@ -322,23 +327,17 @@ def draw_tracks():
         screen.blit(icon_image, icon_rect)
 
         # Select label based on settings
-        if show_full_labels:
-            label = track['full_label']
-        else:
-            label = track['label_without_common']
-
-        if use_title_case_labels:
-            label = label.replace('-', ' ').replace('_', ' ').title()
-        else:
-            label = label.replace('-', ' ').replace('_', ' ')
+        label = track['full_label'] if show_full_labels else track['label_without_common']
+        label = label.replace('-', ' ').replace('_', ' ').title() if use_title_case_labels else label.replace('-', ' ').replace('_', ' ')
 
         # Wrap text to fit within the box width
-        font = pygame.font.SysFont(None, max_font_size)
+        font_size = max_font_size
+        font = pygame.font.SysFont(None, font_size)
         words = label.split()
         lines = []
         current_line = ''
         for word in words:
-            test_line = current_line + ' ' + word if current_line else word
+            test_line = f"{current_line} {word}".strip()
             test_surface = font.render(test_line, True, (0, 0, 0))
             if test_surface.get_width() <= box_width - 10:
                 current_line = test_line
@@ -351,17 +350,17 @@ def draw_tracks():
 
         # Adjust font size if text is too tall
         while True:
-            font = pygame.font.SysFont(None, max_font_size)
+            font = pygame.font.SysFont(None, font_size)
             text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
             total_text_height = sum(text.get_height() for text in text_surfaces)
             total_height = total_text_height + icon_rect.height + 20  # Include icon height
-            if total_height > box_height - 10 and max_font_size > min_font_size:
-                max_font_size -= 1
+            if total_height > box_height - 10 and font_size > min_font_size:
+                font_size -= 1
             else:
                 break
 
         # Re-render text surfaces with the adjusted font size
-        font = pygame.font.SysFont(None, max_font_size)
+        font = pygame.font.SysFont(None, font_size)
         text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
 
         # Calculate starting y-coordinate to place the label below the icon
@@ -387,8 +386,7 @@ def draw_playback_slider():
     progress_width = int(slider_width * progress)
     pygame.draw.rect(screen, (0, 200, 0), (x, y, progress_width, slider_height))
     # Store slider rect for interaction
-    global slider_rect
-    slider_rect = pygame.Rect(x, y, slider_width, slider_height)
+    ui_elements['slider_rect'] = pygame.Rect(x, y, slider_width, slider_height)
 
 def audio_callback(outdata, frames, time, status):
     """Callback function for sounddevice.OutputStream."""
@@ -430,7 +428,7 @@ def audio_callback(outdata, frames, time, status):
 
 def play_audio():
     """Function to play audio using sounddevice."""
-    global tracks, playing, playback_position, stop_event, seek_event, seek_position
+    global tracks, playing
     samplerate = tracks[0]['samplerate']
     blocksize = 1024
     with sd.OutputStream(channels=tracks[0]['data'].shape[1],
@@ -488,16 +486,16 @@ while running:
                     running = False
         elif event.type == MOUSEBUTTONDOWN:
             pos = pygame.mouse.get_pos()
-            if 'load_button_rect_global' in globals() and load_button_rect_global.collidepoint(pos):
+            if ui_elements.get('load_button_rect') and ui_elements['load_button_rect'].collidepoint(pos):
                 # Load tracks
                 stop_event.set()
                 if audio_thread and audio_thread.is_alive():
                     audio_thread.join()
                 load_sound_files()
-            elif 'settings_button_rect_global' in globals() and settings_button_rect_global.collidepoint(pos):
+            elif ui_elements.get('settings_button_rect') and ui_elements['settings_button_rect'].collidepoint(pos):
                 # Toggle settings menu
                 settings_menu_open = not settings_menu_open
-            elif 'play_button_rect_global' in globals() and play_button_rect_global.collidepoint(pos):
+            elif ui_elements.get('play_button_rect') and ui_elements['play_button_rect'].collidepoint(pos):
                 # Play/Pause toggle
                 if not playing and total_duration > 0:
                     # Play all tracks
@@ -511,20 +509,20 @@ while running:
                     if audio_thread and audio_thread.is_alive():
                         audio_thread.join()
                     playing = False
-            elif 'slider_rect' in globals() and slider_rect.collidepoint(pos):
+            elif ui_elements.get('slider_rect') and ui_elements['slider_rect'].collidepoint(pos):
                 # Calculate new playback position
-                x = pos[0] - slider_rect.x
-                ratio = x / slider_rect.width
+                x = pos[0] - ui_elements['slider_rect'].x
+                ratio = x / ui_elements['slider_rect'].width
                 seek_position = total_duration * ratio
                 seek_event.set()
                 playback_position = seek_position
             elif settings_menu_open:
                 # Handle clicks inside the settings menu
-                if 'title_checkbox_rect_global' in globals() and title_checkbox_rect_global.collidepoint(pos):
+                if ui_elements.get('title_checkbox_rect') and ui_elements['title_checkbox_rect'].collidepoint(pos):
                     show_title = not show_title
-                elif 'full_label_checkbox_rect_global' in globals() and full_label_checkbox_rect_global.collidepoint(pos):
+                elif ui_elements.get('full_label_checkbox_rect') and ui_elements['full_label_checkbox_rect'].collidepoint(pos):
                     show_full_labels = not show_full_labels
-                elif 'label_case_checkbox_rect_global' in globals() and label_case_checkbox_rect_global.collidepoint(pos):
+                elif ui_elements.get('label_case_checkbox_rect') and ui_elements['label_case_checkbox_rect'].collidepoint(pos):
                     use_title_case_labels = not use_title_case_labels
             else:
                 for i, track in enumerate(tracks):
