@@ -3,14 +3,15 @@ import sys
 import os
 from pygame.locals import *
 from tkinter import Tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 import sounddevice as sd
 import soundfile as sf
 import numpy as np
 import threading
+import textwrap
 
-# v0.8
-# Function to remove common pattern from imported filenames, cleaned up and displayed as Title. 
+# v0.9
+# added settings button with 3 options for displaying track and title. Also can quit with Q key.
 
 # Initialize Pygame
 pygame.init()
@@ -34,6 +35,12 @@ seek_position = 0
 
 # Common artist and track name
 artist_track_name = ""
+
+# Settings
+settings_menu_open = False
+show_title = True
+show_full_labels = True
+use_title_case_labels = True
 
 # Mapping of track types to icon image filenames
 # Adjust the icon_location to point to your icons directory
@@ -85,7 +92,7 @@ def get_track_type(filename):
         return 'other'
 
 def find_common_pattern(filenames):
-    """Find the common prefix in the list of filenames."""
+    """Find the common pattern in the list of filenames."""
     if not filenames:
         return ""
     # Extract base names without extensions
@@ -124,7 +131,6 @@ def load_sound_files():
 
     # Find common pattern among filenames
     artist_track_name = find_common_pattern(file_paths)
-    artist_track_name_display = artist_track_name.title()
 
     for file_path in file_paths:
         try:
@@ -133,16 +139,16 @@ def load_sound_files():
             if len(data.shape) == 1:
                 data = np.expand_dims(data, axis=1)  # Convert mono to stereo
             duration = len(data) / samplerate
-            label = os.path.splitext(os.path.basename(file_path))[0]
-            # Replace hyphens and underscores with spaces
-            label = label.replace('-', ' ').replace('_', ' ')
-            # Remove the common pattern from the label
+
+            # Get labels
+            full_label = os.path.splitext(os.path.basename(file_path))[0]
+            label_without_common = full_label
             if artist_track_name:
-                label = label.replace(artist_track_name, '').strip()
-            # If label is empty after removing common pattern, use a default label
-            if not label:
-                label = 'Track'
-            track_type = get_track_type(label)
+                label_without_common = label_without_common.replace(artist_track_name, '').strip()
+            if not label_without_common:
+                label_without_common = 'Track'
+
+            track_type = get_track_type(label_without_common)
             # Load icon image
             icon_path = track_type_icons.get(track_type, os.path.join(icon_location, 'music-notes.png'))
             icon_image = pygame.image.load(icon_path).convert_alpha()
@@ -152,7 +158,8 @@ def load_sound_files():
             tracks.append({
                 'data': data,
                 'samplerate': samplerate,
-                'label': label,
+                'full_label': full_label,
+                'label_without_common': label_without_common,
                 'type': track_type,
                 'icon': icon_image,
             })
@@ -167,9 +174,11 @@ def load_sound_files():
 
 def draw_artist_track_name():
     """Function to draw the artist and track name above the track buttons."""
-    if artist_track_name:
+    if artist_track_name and show_title:
         # Prepare the display text
-        display_text = artist_track_name.title()
+        display_text = artist_track_name
+        if use_title_case_labels:
+            display_text = display_text.replace('-', ' ').replace('_', ' ').title()
         font = pygame.font.SysFont(None, 36)
         text_surface = font.render(display_text, True, (255, 255, 255))
         text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, MENU_BAR_HEIGHT + 30))
@@ -181,15 +190,74 @@ def draw_menu_bar():
     pygame.draw.rect(screen, (70, 70, 70), (0, 0, SCREEN_WIDTH, MENU_BAR_HEIGHT))
     # Draw "Load Tracks" button
     font = pygame.font.SysFont(None, 24)
-    load_text = font.render("Load Tracks", True, (255, 255, 255))
-    text_width, text_height = load_text.get_size()
     button_padding = 10
-    load_button_rect = pygame.Rect(10, 5, text_width + button_padding * 2, text_height + button_padding)
+
+    # Load Tracks Button
+    load_text = font.render("Load Tracks", True, (255, 255, 255))
+    load_text_width, load_text_height = load_text.get_size()
+    load_button_rect = pygame.Rect(10, 5, load_text_width + button_padding * 2, load_text_height + button_padding)
     pygame.draw.rect(screen, (100, 100, 100), load_button_rect)
     screen.blit(load_text, (load_button_rect.x + button_padding, load_button_rect.y + button_padding // 2))
-    # Store button rect for interaction
-    global load_button_rect_global
+
+    # Settings Button
+    settings_text = font.render("Settings", True, (255, 255, 255))
+    settings_text_width, settings_text_height = settings_text.get_size()
+    # Position settings button next to load tracks button
+    settings_button_x = load_button_rect.right + 10  # 10 pixels gap
+    settings_button_rect = pygame.Rect(settings_button_x, 5, settings_text_width + button_padding * 2, settings_text_height + button_padding)
+    pygame.draw.rect(screen, (100, 100, 100), settings_button_rect)
+    screen.blit(settings_text, (settings_button_rect.x + button_padding, settings_button_rect.y + button_padding // 2))
+
+    # Store button rects for interaction
+    global load_button_rect_global, settings_button_rect_global
     load_button_rect_global = load_button_rect
+    settings_button_rect_global = settings_button_rect
+
+def draw_settings_menu():
+    """Function to draw the settings menu."""
+    menu_width = 300
+    menu_height = 200
+    x = (SCREEN_WIDTH - menu_width) // 2
+    y = (SCREEN_HEIGHT - menu_height) // 2
+    # Draw menu background
+    pygame.draw.rect(screen, (60, 60, 60), (x, y, menu_width, menu_height))
+    pygame.draw.rect(screen, (255, 255, 255), (x, y, menu_width, menu_height), 2)  # Border
+
+    font = pygame.font.SysFont(None, 24)
+    button_padding = 10
+
+    # Option 1: Toggle Title Visibility
+    title_text = "Show Title"
+    title_label = font.render(title_text, True, (255, 255, 255))
+    title_checkbox_rect = pygame.Rect(x + 20, y + 30, 20, 20)
+    pygame.draw.rect(screen, (255, 255, 255), title_checkbox_rect, 2)
+    if show_title:
+        pygame.draw.rect(screen, (255, 255, 255), title_checkbox_rect.inflate(-4, -4))
+    screen.blit(title_label, (title_checkbox_rect.right + 10, title_checkbox_rect.y))
+
+    # Option 2: Toggle Full Track Labels
+    full_label_text = "Show Full Track Labels"
+    full_label_label = font.render(full_label_text, True, (255, 255, 255))
+    full_label_checkbox_rect = pygame.Rect(x + 20, y + 70, 20, 20)
+    pygame.draw.rect(screen, (255, 255, 255), full_label_checkbox_rect, 2)
+    if show_full_labels:
+        pygame.draw.rect(screen, (255, 255, 255), full_label_checkbox_rect.inflate(-4, -4))
+    screen.blit(full_label_label, (full_label_checkbox_rect.right + 10, full_label_checkbox_rect.y))
+
+    # Option 3: Show Raw or Title Case Labels
+    label_case_text = "Use Title Case Labels"
+    label_case_label = font.render(label_case_text, True, (255, 255, 255))
+    label_case_checkbox_rect = pygame.Rect(x + 20, y + 110, 20, 20)
+    pygame.draw.rect(screen, (255, 255, 255), label_case_checkbox_rect, 2)
+    if use_title_case_labels:
+        pygame.draw.rect(screen, (255, 255, 255), label_case_checkbox_rect.inflate(-4, -4))
+    screen.blit(label_case_label, (label_case_checkbox_rect.right + 10, label_case_checkbox_rect.y))
+
+    # Store checkbox rects for interaction
+    global title_checkbox_rect_global, full_label_checkbox_rect_global, label_case_checkbox_rect_global
+    title_checkbox_rect_global = title_checkbox_rect
+    full_label_checkbox_rect_global = full_label_checkbox_rect
+    label_case_checkbox_rect_global = label_case_checkbox_rect
 
 def draw_play_pause_button():
     """Function to draw the play/pause button."""
@@ -227,7 +295,8 @@ def draw_tracks():
     box_height = 150
     padding = 20
     start_x = padding
-    y_offset = MENU_BAR_HEIGHT + 70  # Start below the menu bar and artist name
+    # Adjust y_offset based on whether title is shown
+    y_offset = MENU_BAR_HEIGHT + 70 if show_title else MENU_BAR_HEIGHT + 20  # Start below the menu bar and artist name
     max_font_size = 24
     min_font_size = 12
     columns = max(1, (SCREEN_WIDTH - padding * 2) // (box_width + padding))
@@ -252,29 +321,48 @@ def draw_tracks():
         icon_rect = icon_image.get_rect(center=(x + box_width // 2, current_y + 40))
         screen.blit(icon_image, icon_rect)
 
-        # Prepare label
-        label = track['label']
-        lines = label.split('\n')
-        # Adjust font size to fit the text within the box
-        font_size = max_font_size
-        font = pygame.font.SysFont(None, font_size)
-        text_surfaces = [font.render(line.title(), True, (0, 0, 0)) for line in lines]
+        # Select label based on settings
+        if show_full_labels:
+            label = track['full_label']
+        else:
+            label = track['label_without_common']
 
-        # Reduce font size if text is too wide or too tall
+        if use_title_case_labels:
+            label = label.replace('-', ' ').replace('_', ' ').title()
+        else:
+            label = label.replace('-', ' ').replace('_', ' ')
+
+        # Wrap text to fit within the box width
+        font = pygame.font.SysFont(None, max_font_size)
+        words = label.split()
+        lines = []
+        current_line = ''
+        for word in words:
+            test_line = current_line + ' ' + word if current_line else word
+            test_surface = font.render(test_line, True, (0, 0, 0))
+            if test_surface.get_width() <= box_width - 10:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+        if current_line:
+            lines.append(current_line)
+
+        # Adjust font size if text is too tall
         while True:
-            # Check if any line is too wide
-            too_wide = any(text.get_width() > box_width - 10 for text in text_surfaces)
-            # Check if total text height is too tall
+            font = pygame.font.SysFont(None, max_font_size)
+            text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
             total_text_height = sum(text.get_height() for text in text_surfaces)
             total_height = total_text_height + icon_rect.height + 20  # Include icon height
-            if too_wide or total_height > box_height - 10:
-                font_size -= 1
-                if font_size < min_font_size:
-                    break  # Cannot reduce font size further
-                font = pygame.font.SysFont(None, font_size)
-                text_surfaces = [font.render(line.title(), True, (0, 0, 0)) for line in lines]
+            if total_height > box_height - 10 and max_font_size > min_font_size:
+                max_font_size -= 1
             else:
                 break
+
+        # Re-render text surfaces with the adjusted font size
+        font = pygame.font.SysFont(None, max_font_size)
+        text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
 
         # Calculate starting y-coordinate to place the label below the icon
         label_y = icon_rect.bottom + 5
@@ -387,6 +475,17 @@ while running:
                     if audio_thread and audio_thread.is_alive():
                         audio_thread.join()
                     playing = False
+            elif event.key == K_q:
+                # Prompt user to confirm exit
+                root = Tk()
+                root.withdraw()  # Hide the root window
+                result = messagebox.askyesno("Exit", "Are you sure you want to exit?")
+                root.destroy()
+                if result:
+                    stop_event.set()
+                    if audio_thread and audio_thread.is_alive():
+                        audio_thread.join()
+                    running = False
         elif event.type == MOUSEBUTTONDOWN:
             pos = pygame.mouse.get_pos()
             if 'load_button_rect_global' in globals() and load_button_rect_global.collidepoint(pos):
@@ -395,6 +494,9 @@ while running:
                 if audio_thread and audio_thread.is_alive():
                     audio_thread.join()
                 load_sound_files()
+            elif 'settings_button_rect_global' in globals() and settings_button_rect_global.collidepoint(pos):
+                # Toggle settings menu
+                settings_menu_open = not settings_menu_open
             elif 'play_button_rect_global' in globals() and play_button_rect_global.collidepoint(pos):
                 # Play/Pause toggle
                 if not playing and total_duration > 0:
@@ -416,6 +518,14 @@ while running:
                 seek_position = total_duration * ratio
                 seek_event.set()
                 playback_position = seek_position
+            elif settings_menu_open:
+                # Handle clicks inside the settings menu
+                if 'title_checkbox_rect_global' in globals() and title_checkbox_rect_global.collidepoint(pos):
+                    show_title = not show_title
+                elif 'full_label_checkbox_rect_global' in globals() and full_label_checkbox_rect_global.collidepoint(pos):
+                    show_full_labels = not show_full_labels
+                elif 'label_case_checkbox_rect_global' in globals() and label_case_checkbox_rect_global.collidepoint(pos):
+                    use_title_case_labels = not use_title_case_labels
             else:
                 for i, track in enumerate(tracks):
                     if 'rect' in track and track['rect'].collidepoint(pos):
@@ -424,11 +534,14 @@ while running:
 
     screen.fill((50, 50, 50))
     draw_menu_bar()
-    draw_artist_track_name()
+    if show_title:
+        draw_artist_track_name()
     draw_tracks()
     draw_play_pause_button()
     draw_playback_slider()
     draw_timecode()
+    if settings_menu_open:
+        draw_settings_menu()
     pygame.display.flip()
 
 pygame.quit()

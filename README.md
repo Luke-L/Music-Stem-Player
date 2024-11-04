@@ -1,5 +1,5 @@
 # About
-This is my Python Stem Player v0.5. created to make it (slightly) easier to understand the different tracks without using a full DAW like Reaper or Ableton. Is it easier? Maybe. 
+This is my Python Stem Player. created to make it (slightly) easier to understand the different tracks without using a full DAW like Reaper or Ableton. Is it easier? Maybe. 
 
 The program supports .wav and .mp3 files. Ensure your audio files are in one of these formats.
 The program uses threading to handle simultaneous playback of multiple tracks.
@@ -31,15 +31,14 @@ pip install pygame sounddevice soundfile numpy
 
 Icons for tracks require specific files instead of emoji. Ensure the location in the program is customized to match your file structure. 
 
-
 # Playback
 There are a few key binds right now to be aware of:
 
-`space` - Play/pause
+`Space` - Play/pause
 
 `L` - Load tracks
 
-`q` - Quit program (broken right now)
+`Q` - Quit program (broken right now)
 
 # Changelog
 
@@ -61,3 +60,6 @@ There are a few key binds right now to be aware of:
 - v0.8
     - Added a new function to find the common pattern among the loaded filenames.
     - Removed common pattern from track labels, displaying and formatting this pattern as a Title.
+- v0.9
+    - Added settings button to adjust the visuals of track label and title.
+    - Now uses Q to exit the program with a confirm prompt.
