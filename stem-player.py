@@ -9,8 +9,8 @@ import soundfile as sf
 import numpy as np
 import threading
 
-# v1.02
-# Better icon dark/light to indicate status.
+# v1.1
+# Added Solo mode, better icon color logic. 
 
 # Initialize Pygame
 pygame.init()
@@ -70,6 +70,11 @@ pygame.draw.polygon(play_button_image, (0, 255, 0), [(15, 10), (15, 40), (40, 25
 pause_button_image = pygame.Surface((PLAY_BUTTON_SIZE, PLAY_BUTTON_SIZE), pygame.SRCALPHA)
 pygame.draw.rect(pause_button_image, (255, 0, 0), (15, 10, 10, 30))
 pygame.draw.rect(pause_button_image, (255, 0, 0), (30, 10, 10, 30))
+
+# State variables for solo mode
+rmb_pressed = False
+prev_mute_flags = []
+soloed_track_idx = None
 
 def get_track_type(filename):
     """Determine the track type based on keywords in the filename."""
@@ -166,32 +171,6 @@ def load_sound_files():
             icon_size = (64, 64)
             icon_image = pygame.transform.smoothscale(icon_image, icon_size)
 
-            # Apply tint based on track type
-            if track_type == 'vocals':
-                tint_color = (218, 43, 56)  # Hex da2b38
-            elif track_type == 'other':
-                tint_color = (214, 192, 4)  # Hex d6c004
-            elif track_type == 'bass':
-                tint_color = (62, 169, 40)  # Hex 3ea928
-            elif track_type in ['drums', 'percussion']:
-                tint_color = (0, 137, 195)  # Hex 0089c3
-            else:
-                tint_color = None
-
-            if tint_color:
-                # Create a new surface to apply the tint color
-                tinted_icon = pygame.Surface(icon_image.get_size(), pygame.SRCALPHA)
-                for x in range(icon_image.get_width()):
-                    for y in range(icon_image.get_height()):
-                        r, g, b, a = icon_image.get_at((x, y))
-                        if a != 0:  # Only tint non-transparent pixels
-                            # Blend the original color with the tint color
-                            r = (r * tint_color[0]) // 255
-                            g = (g * tint_color[1]) // 255
-                            b = (b * tint_color[2]) // 255
-                            tinted_icon.set_at((x, y), (r, g, b, a))
-                icon_image = tinted_icon  # Use the tinted icon as the final icon image
-
             tracks.append({
                 'data': data,
                 'samplerate': samplerate,
@@ -208,23 +187,6 @@ def load_sound_files():
     total_duration = max_duration
     playback_position = 0  # Reset playback position
     playing = False
-
-def recolor_icon(icon_image, color):
-    """Recolor the icon image to the specified color, keeping the alpha channel."""
-    # Ensure the icon has per-pixel alpha
-    icon_image = icon_image.convert_alpha()
-
-    # Create a copy of the icon image
-    tinted_icon = icon_image.copy()
-
-    # Clear the RGB channels by multiplying by zero (makes the image black)
-    tinted_icon.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGB_MULT)
-
-    # Add the desired color to the image
-    tinted_icon.fill(color + (0,), special_flags=pygame.BLEND_RGB_ADD)
-
-    return tinted_icon
-
 
 def draw_artist_track_name():
     """Function to draw the artist and track name above the track buttons."""
@@ -338,17 +300,34 @@ def draw_timecode():
     timecode_rect = timecode_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
     screen.blit(timecode_surface, timecode_rect)
 
+def recolor_icon(icon_image, color):
+    """Recolor the icon image to the specified color, keeping the alpha channel."""
+    # Ensure the icon has per-pixel alpha
+    icon_image = icon_image.convert_alpha()
+
+    # Create a copy of the icon image
+    tinted_icon = icon_image.copy()
+
+    # Clear the RGB channels by multiplying by zero (makes the image black)
+    tinted_icon.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGB_MULT)
+
+    # Add the desired color to the image
+    tinted_icon.fill(color + (0,), special_flags=pygame.BLEND_RGB_ADD)
+
+    return tinted_icon
+
 def draw_tracks():
     """Function to draw icon boxes for each track."""
     num_tracks = len(tracks)
     if num_tracks == 0:
         return
+
     box_width = 150
     box_height = 150
     padding = 20
     start_x = padding
-    # Adjust y_offset based on whether title is shown
-    y_offset = MENU_BAR_HEIGHT + 70 if show_title else MENU_BAR_HEIGHT + 20
+    # Adjust y_offset based on whether the title is shown
+    y_offset = MENU_BAR_HEIGHT + 70 if show_title else MENU_BAR_HEIGHT + 20  # Start below the menu bar and artist name
     max_font_size = 24
     min_font_size = 12
     columns = max(1, (SCREEN_WIDTH - padding * 2) // (box_width + padding))
@@ -379,12 +358,16 @@ def draw_tracks():
 
         # Determine background color based on track type
         track_type = track['type']
-        color = track_colors.get(track_type, (150, 150, 150))  # Default to gray
+        color = track_colors.get(track_type, (150, 150, 150))  # Default to gray if type is not defined
         if mute_flags[idx]:
             color = tuple(max(0, c - 50) for c in color)  # Darken color if muted
 
         # Draw background
         pygame.draw.rect(screen, color, rect)
+
+        # If this track is soloed, draw a thick white outline
+        if rmb_pressed and idx == soloed_track_idx:
+            pygame.draw.rect(screen, (255, 255, 255), rect, 7)  # 4 pixels thick
 
         # Draw icon
         icon_image = track['icon']
@@ -564,49 +547,80 @@ while running:
                     running = False
         elif event.type == MOUSEBUTTONDOWN:
             pos = pygame.mouse.get_pos()
-            if ui_elements.get('load_button_rect') and ui_elements['load_button_rect'].collidepoint(pos):
-                # Load tracks
-                stop_event.set()
-                if audio_thread and audio_thread.is_alive():
-                    audio_thread.join()
-                load_sound_files()
-            elif ui_elements.get('settings_button_rect') and ui_elements['settings_button_rect'].collidepoint(pos):
-                # Toggle settings menu
-                settings_menu_open = not settings_menu_open
-            elif ui_elements.get('play_button_rect') and ui_elements['play_button_rect'].collidepoint(pos):
-                # Play/Pause toggle
-                if not playing and total_duration > 0:
-                    # Play all tracks
-                    stop_event.clear()
-                    audio_thread = threading.Thread(target=play_audio)
-                    audio_thread.start()
-                    playing = True
-                else:
-                    # Stop all tracks
+            if event.button == 1:  # Left mouse button
+                if ui_elements.get('load_button_rect') and ui_elements['load_button_rect'].collidepoint(pos):
+                    # Load tracks
                     stop_event.set()
                     if audio_thread and audio_thread.is_alive():
                         audio_thread.join()
-                    playing = False
-            elif ui_elements.get('slider_rect') and ui_elements['slider_rect'].collidepoint(pos):
-                # Calculate new playback position
-                x = pos[0] - ui_elements['slider_rect'].x
-                ratio = x / ui_elements['slider_rect'].width
-                seek_position = total_duration * ratio
-                seek_event.set()
-                playback_position = seek_position
-            elif settings_menu_open:
-                # Handle clicks inside the settings menu
-                if ui_elements.get('title_checkbox_rect') and ui_elements['title_checkbox_rect'].collidepoint(pos):
-                    show_title = not show_title
-                elif ui_elements.get('full_label_checkbox_rect') and ui_elements['full_label_checkbox_rect'].collidepoint(pos):
-                    show_full_labels = not show_full_labels
-                elif ui_elements.get('label_case_checkbox_rect') and ui_elements['label_case_checkbox_rect'].collidepoint(pos):
-                    use_title_case_labels = not use_title_case_labels
-            else:
-                for i, track in enumerate(tracks):
-                    if 'rect' in track and track['rect'].collidepoint(pos):
-                        # Toggle mute
-                        mute_flags[i] = not mute_flags[i]
+                    load_sound_files()
+                elif ui_elements.get('settings_button_rect') and ui_elements['settings_button_rect'].collidepoint(pos):
+                    # Toggle settings menu
+                    settings_menu_open = not settings_menu_open
+                elif ui_elements.get('play_button_rect') and ui_elements['play_button_rect'].collidepoint(pos):
+                    # Play/Pause toggle
+                    if not playing and total_duration > 0:
+                        # Play all tracks
+                        stop_event.clear()
+                        audio_thread = threading.Thread(target=play_audio)
+                        audio_thread.start()
+                        playing = True
+                    else:
+                        # Stop all tracks
+                        stop_event.set()
+                        if audio_thread and audio_thread.is_alive():
+                            audio_thread.join()
+                        playing = False
+                elif ui_elements.get('slider_rect') and ui_elements['slider_rect'].collidepoint(pos):
+                    # Calculate new playback position
+                    x = pos[0] - ui_elements['slider_rect'].x
+                    ratio = x / ui_elements['slider_rect'].width
+                    seek_position = total_duration * ratio
+                    seek_event.set()
+                    playback_position = seek_position
+                elif settings_menu_open:
+                    # Handle clicks inside the settings menu
+                    if ui_elements.get('title_checkbox_rect') and ui_elements['title_checkbox_rect'].collidepoint(pos):
+                        show_title = not show_title
+                    elif ui_elements.get('full_label_checkbox_rect') and ui_elements['full_label_checkbox_rect'].collidepoint(pos):
+                        show_full_labels = not show_full_labels
+                    elif ui_elements.get('label_case_checkbox_rect') and ui_elements['label_case_checkbox_rect'].collidepoint(pos):
+                        use_title_case_labels = not use_title_case_labels
+                else:
+                    # Only toggle mute if not in solo mode
+                    if not rmb_pressed:
+                        for i, track in enumerate(tracks):
+                            if 'rect' in track and track['rect'].collidepoint(pos):
+                                # Toggle mute
+                                mute_flags[i] = not mute_flags[i]
+            elif event.button == 3:  # Right mouse button
+                rmb_pressed = True
+                prev_mute_flags = mute_flags.copy()
+                soloed_track_idx = None
+        elif event.type == MOUSEBUTTONUP:
+            if event.button == 3:  # Right mouse button
+                rmb_pressed = False
+                mute_flags = prev_mute_flags.copy()
+                soloed_track_idx = None
+
+    # Update solo mode if RMB is pressed
+    if rmb_pressed:
+        pos = pygame.mouse.get_pos()
+        track_hovered = None
+        for idx, track in enumerate(tracks):
+            if 'rect' in track and track['rect'].collidepoint(pos):
+                track_hovered = idx
+                break
+        if track_hovered is not None:
+            if soloed_track_idx != track_hovered:
+                soloed_track_idx = track_hovered
+                # Mute all tracks except the soloed one
+                mute_flags = [True] * len(tracks)
+                mute_flags[soloed_track_idx] = False
+        else:
+            soloed_track_idx = None
+            # Mute all tracks if not hovering over any
+            mute_flags = [True] * len(tracks)
 
     screen.fill((50, 50, 50))
     draw_menu_bar()

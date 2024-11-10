@@ -34,6 +34,10 @@ Icons for tracks require specific files instead of emoji. Ensure the location in
 # Playback
 There are a few key binds right now to be aware of:
 
+`Left Mouse` - Toggles a track on/off.
+
+`Right Mouse` - Temporarily <i>Solo</i>'s any track you hover over. 
+
 `Space` - Play/pause
 
 `L` - Load tracks
@@ -70,3 +74,6 @@ There are a few key binds right now to be aware of:
     - Each track type now has a unique tint color. 
 - v1.02
     - Tracks now show black or white icon and label depending on its status. 
+- v1.1
+    - Added Solo mode used with RMB. 
+    - Better(?) icon color logic. 
