@@ -38,7 +38,7 @@ There are a few key binds right now to be aware of:
 
 `L` - Load tracks
 
-`Q` - Quit program (broken right now)
+`Q` - Quit program
 
 # Changelog
 
@@ -66,3 +66,5 @@ There are a few key binds right now to be aware of:
 - v1.0
     - Settings menu `show_full_labels` bug fix 
     - Cleaning up some redundant or useless code snippets.
+- v1.01
+    - Each track type now has a unique tint color. 

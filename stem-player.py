@@ -9,8 +9,8 @@ import soundfile as sf
 import numpy as np
 import threading
 
-# v1.0
-# bug fix and code tidying up
+# v1.01
+# Implement colors per track type.
 
 # Initialize Pygame
 pygame.init()
@@ -165,6 +165,33 @@ def load_sound_files():
             # Scale icon to fit in the box
             icon_size = (64, 64)
             icon_image = pygame.transform.smoothscale(icon_image, icon_size)
+
+            # Apply tint based on track type
+            if track_type == 'vocals':
+                tint_color = (218, 43, 56)  # Hex da2b38
+            elif track_type == 'other':
+                tint_color = (214, 192, 4)  # Hex d6c004
+            elif track_type == 'bass':
+                tint_color = (62, 169, 40)  # Hex 3ea928
+            elif track_type in ['drums', 'percussion']:
+                tint_color = (0, 137, 195)  # Hex 0089c3
+            else:
+                tint_color = None
+
+            if tint_color:
+                # Create a new surface to apply the tint color
+                tinted_icon = pygame.Surface(icon_image.get_size(), pygame.SRCALPHA)
+                for x in range(icon_image.get_width()):
+                    for y in range(icon_image.get_height()):
+                        r, g, b, a = icon_image.get_at((x, y))
+                        if a != 0:  # Only tint non-transparent pixels
+                            # Blend the original color with the tint color
+                            r = (r * tint_color[0]) // 255
+                            g = (g * tint_color[1]) // 255
+                            b = (b * tint_color[2]) // 255
+                            tinted_icon.set_at((x, y), (r, g, b, a))
+                icon_image = tinted_icon  # Use the tinted icon as the final icon image
+
             tracks.append({
                 'data': data,
                 'samplerate': samplerate,
@@ -181,6 +208,7 @@ def load_sound_files():
     total_duration = max_duration
     playback_position = 0  # Reset playback position
     playing = False
+
 
 def draw_artist_track_name():
     """Function to draw the artist and track name above the track buttons."""
@@ -310,6 +338,19 @@ def draw_tracks():
     columns = max(1, (SCREEN_WIDTH - padding * 2) // (box_width + padding))
     rows = (num_tracks + columns - 1) // columns
 
+    # Define background colors based on track type
+    track_colors = {
+        'vocals': (218, 43, 56),  # Hex da2b38
+        'other': (214, 192, 4),   # Hex d6c004
+        'bass': (62, 169, 40),    # Hex 3ea928,
+        'instrum': (75, 0, 130)   # Example color for instrument (indigo)
+    }
+    # Assign the same color to multiple track types in one go
+    for track_type in ['drums', 'percussion']:
+        track_colors[track_type] = (0, 137, 195)  # Hex 0089c3
+    for track_type in ['guitar', 'piano', 'synth']:
+        track_colors[track_type] = (128, 0, 128)  # Example color for guitar, piano, synth (purple)
+
     for idx, track in enumerate(tracks):
         row = idx // columns
         col = idx % columns
@@ -317,8 +358,14 @@ def draw_tracks():
         current_y = y_offset + row * (box_height + padding)
         rect = pygame.Rect(x, current_y, box_width, box_height)
         track['rect'] = rect  # Store rect in track dict
+
+        # Determine background color based on track type
+        track_type = track['type']
+        color = track_colors.get(track_type, (150, 150, 150))  # Default to gray if type is not defined
+        if mute_flags[idx]:
+            color = tuple(max(0, c - 50) for c in color)  # Darken color if muted
+
         # Draw background
-        color = (150, 150, 150) if mute_flags[idx] else (200, 200, 200)
         pygame.draw.rect(screen, color, rect)
 
         # Draw icon
@@ -369,6 +416,9 @@ def draw_tracks():
             text_rect = text.get_rect(centerx=x + box_width // 2, y=label_y)
             screen.blit(text, text_rect)
             label_y += text.get_height()
+
+
+
 
 def draw_playback_slider():
     """Function to draw the playback slider at the bottom."""
