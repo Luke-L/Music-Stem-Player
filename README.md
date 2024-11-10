@@ -68,3 +68,5 @@ There are a few key binds right now to be aware of:
     - Cleaning up some redundant or useless code snippets.
 - v1.01
     - Each track type now has a unique tint color. 
+- v1.02
+    - Tracks now show black or white icon and label depending on its status. 

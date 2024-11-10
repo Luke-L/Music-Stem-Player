@@ -9,8 +9,8 @@ import soundfile as sf
 import numpy as np
 import threading
 
-# v1.01
-# Implement colors per track type.
+# v1.02
+# Better icon dark/light to indicate status.
 
 # Initialize Pygame
 pygame.init()
@@ -209,6 +209,22 @@ def load_sound_files():
     playback_position = 0  # Reset playback position
     playing = False
 
+def recolor_icon(icon_image, color):
+    """Recolor the icon image to the specified color, keeping the alpha channel."""
+    # Ensure the icon has per-pixel alpha
+    icon_image = icon_image.convert_alpha()
+
+    # Create a copy of the icon image
+    tinted_icon = icon_image.copy()
+
+    # Clear the RGB channels by multiplying by zero (makes the image black)
+    tinted_icon.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGB_MULT)
+
+    # Add the desired color to the image
+    tinted_icon.fill(color + (0,), special_flags=pygame.BLEND_RGB_ADD)
+
+    return tinted_icon
+
 
 def draw_artist_track_name():
     """Function to draw the artist and track name above the track buttons."""
@@ -332,7 +348,7 @@ def draw_tracks():
     padding = 20
     start_x = padding
     # Adjust y_offset based on whether title is shown
-    y_offset = MENU_BAR_HEIGHT + 70 if show_title else MENU_BAR_HEIGHT + 20  # Start below the menu bar and artist name
+    y_offset = MENU_BAR_HEIGHT + 70 if show_title else MENU_BAR_HEIGHT + 20
     max_font_size = 24
     min_font_size = 12
     columns = max(1, (SCREEN_WIDTH - padding * 2) // (box_width + padding))
@@ -342,14 +358,16 @@ def draw_tracks():
     track_colors = {
         'vocals': (218, 43, 56),  # Hex da2b38
         'other': (214, 192, 4),   # Hex d6c004
-        'bass': (62, 169, 40),    # Hex 3ea928,
-        'instrum': (75, 0, 130)   # Example color for instrument (indigo)
+        'bass': (62, 169, 40),    # Hex 3ea928
+        'instrum': (75, 0, 130)   # Indigo color for instrument
     }
-    # Assign the same color to multiple track types in one go
+
+    # Assign the same color to multiple track types
     for track_type in ['drums', 'percussion']:
         track_colors[track_type] = (0, 137, 195)  # Hex 0089c3
+
     for track_type in ['guitar', 'piano', 'synth']:
-        track_colors[track_type] = (128, 0, 128)  # Example color for guitar, piano, synth (purple)
+        track_colors[track_type] = (128, 0, 128)  # Purple color
 
     for idx, track in enumerate(tracks):
         row = idx // columns
@@ -361,7 +379,7 @@ def draw_tracks():
 
         # Determine background color based on track type
         track_type = track['type']
-        color = track_colors.get(track_type, (150, 150, 150))  # Default to gray if type is not defined
+        color = track_colors.get(track_type, (150, 150, 150))  # Default to gray
         if mute_flags[idx]:
             color = tuple(max(0, c - 50) for c in color)  # Darken color if muted
 
@@ -371,11 +389,24 @@ def draw_tracks():
         # Draw icon
         icon_image = track['icon']
         icon_rect = icon_image.get_rect(center=(x + box_width // 2, current_y + 40))
-        screen.blit(icon_image, icon_rect)
+
+        # Tint the icon based on whether the track is active or inactive
+        if not mute_flags[idx]:
+            # Active track: recolor the icon to white
+            tinted_icon = recolor_icon(icon_image, (255, 255, 255))
+        else:
+            # Inactive track: recolor the icon to black
+            tinted_icon = recolor_icon(icon_image, (0, 0, 0))
+
+        screen.blit(tinted_icon, icon_rect)
 
         # Select label based on settings
         label = track['full_label'] if show_full_labels else track['label_without_common']
-        label = label.replace('-', ' ').replace('_', ' ').title() if use_title_case_labels else label.replace('-', ' ').replace('_', ' ')
+        label = (label.replace('-', ' ').replace('_', ' ').title() if use_title_case_labels
+                 else label.replace('-', ' ').replace('_', ' '))
+
+        # Determine text color based on whether the track is active or inactive
+        text_color = (255, 255, 255) if not mute_flags[idx] else (0, 0, 0)
 
         # Wrap text to fit within the box width
         font_size = max_font_size
@@ -385,7 +416,7 @@ def draw_tracks():
         current_line = ''
         for word in words:
             test_line = f"{current_line} {word}".strip()
-            test_surface = font.render(test_line, True, (0, 0, 0))
+            test_surface = font.render(test_line, True, text_color)
             if test_surface.get_width() <= box_width - 10:
                 current_line = test_line
             else:
@@ -398,7 +429,7 @@ def draw_tracks():
         # Adjust font size if text is too tall
         while True:
             font = pygame.font.SysFont(None, font_size)
-            text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
+            text_surfaces = [font.render(line, True, text_color) for line in lines]
             total_text_height = sum(text.get_height() for text in text_surfaces)
             total_height = total_text_height + icon_rect.height + 20  # Include icon height
             if total_height > box_height - 10 and font_size > min_font_size:
@@ -408,7 +439,7 @@ def draw_tracks():
 
         # Re-render text surfaces with the adjusted font size
         font = pygame.font.SysFont(None, font_size)
-        text_surfaces = [font.render(line, True, (0, 0, 0)) for line in lines]
+        text_surfaces = [font.render(line, True, text_color) for line in lines]
 
         # Calculate starting y-coordinate to place the label below the icon
         label_y = icon_rect.bottom + 5
@@ -416,9 +447,6 @@ def draw_tracks():
             text_rect = text.get_rect(centerx=x + box_width // 2, y=label_y)
             screen.blit(text, text_rect)
             label_y += text.get_height()
-
-
-
 
 def draw_playback_slider():
     """Function to draw the playback slider at the bottom."""
