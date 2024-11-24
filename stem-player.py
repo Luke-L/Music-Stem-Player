@@ -9,8 +9,8 @@ import soundfile as sf
 import numpy as np
 import threading
 
-# v1.1
-# Added Solo mode, better icon color logic. 
+# v1.2
+# Added volume controls per track. 
 
 # Initialize Pygame
 pygame.init()
@@ -75,6 +75,12 @@ pygame.draw.rect(pause_button_image, (255, 0, 0), (30, 10, 10, 30))
 rmb_pressed = False
 prev_mute_flags = []
 soloed_track_idx = None
+
+# State variables for volume adjustment
+adjusting_volume = False
+volume_adjust_track_idx = None
+initial_mouse_y = None
+click_detected = False
 
 def get_track_type(filename):
     """Determine the track type based on keywords in the filename."""
@@ -178,6 +184,7 @@ def load_sound_files():
                 'label_without_common': label_without_common,
                 'type': track_type,
                 'icon': icon_image,
+                'volume': 1.0,  # Initialize volume at 100%
             })
             mute_flags.append(False)  # Initially, all tracks are unmuted
             if duration > max_duration:
@@ -367,7 +374,7 @@ def draw_tracks():
 
         # If this track is soloed, draw a thick white outline
         if rmb_pressed and idx == soloed_track_idx:
-            pygame.draw.rect(screen, (255, 255, 255), rect, 7)  # 4 pixels thick
+            pygame.draw.rect(screen, (255, 255, 255), rect, 7)  # 7 pixels thick
 
         # Draw icon
         icon_image = track['icon']
@@ -431,6 +438,16 @@ def draw_tracks():
             screen.blit(text, text_rect)
             label_y += text.get_height()
 
+        # Draw volume overlay
+        volume = track['volume']
+        overlay_height = box_height * (1 - volume)
+        if overlay_height > 0:
+            overlay = pygame.Surface((box_width, overlay_height), pygame.SRCALPHA)
+            overlay.fill((128, 128, 128, 128))  # Gray with 50% opacity
+            overlay_y = current_y  # Start from the top
+            screen.blit(overlay, (x, overlay_y))
+
+
 def draw_playback_slider():
     """Function to draw the playback slider at the bottom."""
     if total_duration == 0:
@@ -470,6 +487,8 @@ def audio_callback(outdata, frames, time, status):
         if not mute_flags[i]:
             track_data = track['data']
             track_samples = track_data[start_sample:end_sample]
+            # Apply volume control
+            track_samples = track_samples * track['volume']
             if track_samples.shape[0] < frames:
                 # Pad with zeros if track is shorter
                 padding = np.zeros((frames - track_samples.shape[0], track_samples.shape[1]))
@@ -587,40 +606,88 @@ while running:
                     elif ui_elements.get('label_case_checkbox_rect') and ui_elements['label_case_checkbox_rect'].collidepoint(pos):
                         use_title_case_labels = not use_title_case_labels
                 else:
-                    # Only toggle mute if not in solo mode
+                    # Only interact with tracks if not in solo mode
                     if not rmb_pressed:
                         for i, track in enumerate(tracks):
                             if 'rect' in track and track['rect'].collidepoint(pos):
-                                # Toggle mute
-                                mute_flags[i] = not mute_flags[i]
+                                # Start adjusting volume
+                                adjusting_volume = True
+                                volume_adjust_track_idx = i
+                                initial_mouse_y = pos[1]
+                                click_detected = True
+                                break
             elif event.button == 3:  # Right mouse button
-                rmb_pressed = True
-                prev_mute_flags = mute_flags.copy()
-                soloed_track_idx = None
+                # Check if mouse is over a track
+                pos = pygame.mouse.get_pos()
+                track_hovered = None
+                for idx, track in enumerate(tracks):
+                    if 'rect' in track and track['rect'].collidepoint(pos):
+                        track_hovered = idx
+                        break
+                if track_hovered is not None:
+                    rmb_pressed = True
+                    prev_mute_flags = mute_flags.copy()
+                    soloed_track_idx = track_hovered
+                    # Mute all tracks except the soloed one
+                    mute_flags = [True] * len(tracks)
+                    mute_flags[soloed_track_idx] = False
+                else:
+                    # Do not enter solo mode if not over a track
+                    rmb_pressed = False
         elif event.type == MOUSEBUTTONUP:
-            if event.button == 3:  # Right mouse button
+            if event.button == 1:  # Left mouse button
+                if adjusting_volume:
+                    if click_detected:
+                        # Toggle mute if click detected
+                        mute_flags[volume_adjust_track_idx] = not mute_flags[volume_adjust_track_idx]
+                    adjusting_volume = False
+                    volume_adjust_track_idx = None
+                    initial_mouse_y = None
+                    click_detected = False
+            elif event.button == 3:  # Right mouse button
                 rmb_pressed = False
                 mute_flags = prev_mute_flags.copy()
                 soloed_track_idx = None
-
-    # Update solo mode if RMB is pressed
-    if rmb_pressed:
-        pos = pygame.mouse.get_pos()
-        track_hovered = None
-        for idx, track in enumerate(tracks):
-            if 'rect' in track and track['rect'].collidepoint(pos):
-                track_hovered = idx
-                break
-        if track_hovered is not None:
-            if soloed_track_idx != track_hovered:
-                soloed_track_idx = track_hovered
-                # Mute all tracks except the soloed one
-                mute_flags = [True] * len(tracks)
-                mute_flags[soloed_track_idx] = False
-        else:
-            soloed_track_idx = None
-            # Mute all tracks if not hovering over any
-            mute_flags = [True] * len(tracks)
+        elif event.type == MOUSEMOTION:
+            if adjusting_volume:
+                current_mouse_y = event.pos[1]
+                delta_y = initial_mouse_y - current_mouse_y  # Inverted to make up positive
+                # If mouse has moved more than a threshold, consider it a drag
+                if abs(delta_y) > 5:
+                    click_detected = False
+                # Update volume based on delta_y
+                sensitivity = 0.005  # Adjust sensitivity as needed
+                volume_change = delta_y * sensitivity  # Now positive when moving up
+                new_volume = tracks[volume_adjust_track_idx]['volume'] + volume_change
+                # Clamp volume between 0.0 and 1.0
+                new_volume = max(0.0, min(1.0, new_volume))
+                tracks[volume_adjust_track_idx]['volume'] = new_volume
+                # Update initial_mouse_y to current position for smooth adjustment
+                initial_mouse_y = current_mouse_y
+            elif pygame.mouse.get_pressed()[2]:  # Right mouse button is held down
+                rmb_pressed = True
+                pos = pygame.mouse.get_pos()
+                track_hovered = None
+                for idx, track in enumerate(tracks):
+                    if 'rect' in track and track['rect'].collidepoint(pos):
+                        track_hovered = idx
+                        break
+                if track_hovered is not None:
+                    if soloed_track_idx != track_hovered:
+                        soloed_track_idx = track_hovered
+                        # Mute all tracks except the soloed one
+                        mute_flags = [True] * len(tracks)
+                        mute_flags[soloed_track_idx] = False
+                else:
+                    soloed_track_idx = None
+                    # Mute all tracks if not hovering over any
+                    mute_flags = [True] * len(tracks)
+            else:
+                if rmb_pressed:
+                    # Right mouse button released outside of MOUSEBUTTONUP event
+                    rmb_pressed = False
+                    mute_flags = prev_mute_flags.copy()
+                    soloed_track_idx = None
 
     screen.fill((50, 50, 50))
     draw_menu_bar()

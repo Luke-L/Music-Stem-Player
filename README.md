@@ -34,7 +34,7 @@ Icons for tracks require specific files instead of emoji. Ensure the location in
 # Playback
 There are a few key binds right now to be aware of:
 
-`Left Mouse` - Toggles a track on/off.
+`Left Mouse` - Toggles a track on/off. Draging a track vertically adjusts the volume. 
 
 `Right Mouse` - Temporarily <i>Solo</i>'s any track you hover over. 
 
@@ -77,3 +77,5 @@ There are a few key binds right now to be aware of:
 - v1.1
     - Added Solo mode used with RMB. 
     - Better(?) icon color logic. 
+- v1.2
+    - Added volume controls per track. 
