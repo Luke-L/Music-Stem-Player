@@ -81,3 +81,5 @@ There are a few key binds right now to be aware of:
     - Added volume controls per track. 
 - v1.3
     - Adjusted icon_location to use the root/icons/ directory relative to the script, added specific track types for percussion instruments.
+- v1.4.1
+    - Implemented hierarchical track categorization based on file name specificity.

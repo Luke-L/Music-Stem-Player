@@ -10,8 +10,8 @@ import numpy as np
 import threading
 import json
 
-# v1.3
-# Adjusted icon_location to use the root/icons/ directory relative to the script.
+# v1.4.1
+# Implemented hierarchical track categorization based on file name specificity.
 
 # Initialize Pygame
 pygame.init()
@@ -81,19 +81,39 @@ volume_adjust_track_idx = None
 initial_mouse_y = None
 click_detected = False
 
-def get_track_type(filename):
+def get_track_type(filename, categories):
     """Determine the track type based on keywords in the filename."""
     filename_lower = filename.lower()
-    for track_type in track_types:
-        for keyword in track_type["keywords"]:
-            if keyword.lower() in filename_lower:
-                return track_type
-    # If no match found, return default
-    return {
-        "type": "default",
-        "icon": default_icon_filename,
-        "color": default_color
-    }
+    best_match = None
+    best_match_level = -1
+    best_match_data = None
+
+    def traverse_categories(categories, level=0):
+        nonlocal best_match, best_match_level, best_match_data
+        for category_name, category_data in categories.items():
+            # Check for keywords match
+            for keyword in category_data.get("keywords", []):
+                if keyword.lower() in filename_lower:
+                    if level > best_match_level:
+                        best_match = category_name
+                        best_match_level = level
+                        best_match_data = category_data
+            # Recursively check subcategories
+            subcategories = category_data.get("subcategories", {})
+            if subcategories:
+                traverse_categories(subcategories, level + 1)
+
+    traverse_categories(categories)
+    if best_match_data:
+        return best_match_data
+    else:
+        # Return default
+        return {
+            "type": "default",
+            "icon": default_icon_filename,
+            "color": default_color
+        }
+
 
 def find_common_words(filenames):
     """Find the common words in the list of filenames, preserving order."""
@@ -145,7 +165,12 @@ def load_sound_files():
             # Read audio file
             data, samplerate = sf.read(file_path, dtype='float32')
             if len(data.shape) == 1:
-                data = np.expand_dims(data, axis=1)  # Convert mono to stereo
+                # Convert mono (shape: [num_samples,]) to stereo (shape: [num_samples, 2]) by duplicating the channel
+                data = np.stack((data, data), axis=1)
+            elif data.shape[1] == 1:
+                # If data has shape [num_samples, 1], duplicate the channel to make it stereo
+                data = np.repeat(data, 2, axis=1)
+
             duration = len(data) / samplerate
 
             # Get labels
@@ -161,8 +186,7 @@ def load_sound_files():
                 label_without_common = 'Track'
 
             # Get track type information from JSON config
-            track_type_info = get_track_type(label_without_common)
-            track_type = track_type_info["type"]
+            track_type_info = get_track_type(label_without_common, track_types)
             icon_filename = track_type_info["icon"]
             color = track_type_info["color"]
 
@@ -178,7 +202,6 @@ def load_sound_files():
                 'samplerate': samplerate,
                 'full_label': full_label,
                 'label_without_common': label_without_common,
-                'type': track_type,
                 'icon': icon_image,
                 'volume': 1.0,  # Initialize volume at 100%
                 'color': color  # Store color from JSON
@@ -462,7 +485,7 @@ def audio_callback(outdata, frames, time, status):
 
     start_sample = int(playback_position * tracks[0]['samplerate'])
     end_sample = start_sample + frames
-    data = np.zeros((frames, tracks[0]['data'].shape[1]), dtype='float32')
+    data = np.zeros((frames, 2), dtype='float32')  # Initialize buffer for stereo output
 
     for i, track in enumerate(tracks):
         if not mute_flags[i]:
@@ -492,10 +515,11 @@ def play_audio():
     global tracks, playing
     samplerate = tracks[0]['samplerate']
     blocksize = 1024
-    with sd.OutputStream(channels=tracks[0]['data'].shape[1],
-                         samplerate=samplerate,
-                         blocksize=blocksize,
-                         callback=audio_callback):
+    with sd.OutputStream(channels=2,
+                        samplerate=samplerate,
+                        blocksize=blocksize,
+                        callback=audio_callback):
+
         while not stop_event.is_set():
             threading.Event().wait(0.1)
 
