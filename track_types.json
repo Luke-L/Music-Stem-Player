@@ -1,0 +1,79 @@
+{
+    "track_types": [
+      {
+        "type": "guitar",
+        "keywords": ["guitar", "electric guitar"],
+        "icon": "guitar-electric.png",
+        "color": [128, 0, 128]
+      },
+      {
+        "type": "bass",
+        "keywords": ["bass", "bass guitar"],
+        "icon": "bass-guitar.png",
+        "color": [62, 169, 40]
+      },
+      {
+        "type": "drums",
+        "keywords": ["drums", "percussion"],
+        "icon": "drums.png",
+        "color": [0, 137, 195]
+      },
+      {
+        "type": "cymbals",
+        "keywords": ["cymbals", "cymbal", "hihat", "hi-hat", "hi hat"],
+        "icon": "cymbalsdrum.png",
+        "color": [64, 132, 161]
+      },
+      {
+        "type": "kick",
+        "keywords": ["kick", "kick drum", "bass drum"],
+        "icon": "kickdrum.png",
+        "color": [95, 130, 144]
+      },
+      {
+        "type": "snare",
+        "keywords": ["snare", "snare drum"],
+        "icon": "snaredrum.png",
+        "color": [32, 135, 178]
+      },
+      {
+        "type": "toms",
+        "keywords": ["toms", "tom", "tom-tom"],
+        "icon": "tomsdrum.png",
+        "color": [76, 131, 154]
+      },
+      {
+        "type": "piano",
+        "keywords": ["piano", "keyboard", "strings"],
+        "icon": "piano-keyboard.png",
+        "color": [128, 0, 128]
+      },
+      {
+        "type": "synth",
+        "keywords": ["synth", "synthesizer"],
+        "icon": "sound-mixer.png",
+        "color": [128, 0, 128]
+      },
+      {
+        "type": "vocals",
+        "keywords": ["vocals", "voice", "singing", "singer"],
+        "icon": "microphone.png",
+        "color": [218, 43, 56]
+      },
+      {
+        "type": "instrum",
+        "keywords": ["instrum", "instrumental", "instruments"],
+        "icon": "mixing-table.png",
+        "color": [75, 0, 130]
+      },
+      {
+        "type": "other",
+        "keywords": ["other"],
+        "icon": "wave-sound.png",
+        "color": [214, 192, 4]
+      }
+    ],
+    "default_icon": "music-notes.png",
+    "default_color": [150, 150, 150]
+  }
+  

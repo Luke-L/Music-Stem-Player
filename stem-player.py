@@ -8,9 +8,10 @@ import sounddevice as sd
 import soundfile as sf
 import numpy as np
 import threading
+import json
 
-# v1.2
-# Added volume controls per track. 
+# v1.3
+# Adjusted icon_location to use the root/icons/ directory relative to the script.
 
 # Initialize Pygame
 pygame.init()
@@ -41,20 +42,18 @@ show_title = True
 show_full_labels = False  # Set to False by default as per your requirement
 use_title_case_labels = True
 
-# Mapping of track types to icon image filenames
-# Adjust the icon_location to point to your icons directory
-icon_location = "C:\\Users\\games\\Documents\\icons"
-track_type_icons = {
-    'guitar': os.path.join(icon_location, 'guitar-electric.png'),
-    'bass': os.path.join(icon_location, 'bass-guitar.png'),
-    'drums': os.path.join(icon_location, 'drums.png'),
-    'percussion': os.path.join(icon_location, 'drums.png'),
-    'piano': os.path.join(icon_location, 'piano-keyboard.png'),
-    'synth': os.path.join(icon_location, 'sound-mixer.png'),
-    'instrum': os.path.join(icon_location, 'mixing-table.png'),
-    'vocals': os.path.join(icon_location, 'microphone.png'),
-    'other': os.path.join(icon_location, 'wave-sound.png'),
-}
+# Load track type configurations from JSON file
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_file = os.path.join(script_dir, "track_types.json")
+with open(config_file, "r") as f:
+    config_data = json.load(f)
+
+track_types = config_data["track_types"]
+default_icon_filename = config_data.get("default_icon", "music-notes.png")
+default_color = config_data.get("default_color", [150, 150, 150])
+
+# Adjust the icon_location to point to your icons directory relative to the script directory
+icon_location = os.path.join(script_dir, "icons")
 
 # UI Elements
 MENU_BAR_HEIGHT = 40
@@ -85,24 +84,16 @@ click_detected = False
 def get_track_type(filename):
     """Determine the track type based on keywords in the filename."""
     filename_lower = filename.lower()
-    if 'guitar-electric' in filename_lower or 'guitar' in filename_lower:
-        return 'guitar'
-    elif 'bass-guitar' in filename_lower or 'bass' in filename_lower:
-        return 'bass'
-    elif 'drums' in filename_lower:
-        return 'drums'
-    elif 'percussion' in filename_lower:
-        return 'percussion'
-    elif 'piano' in filename_lower or 'piano-keyboard' in filename_lower:
-        return 'piano'
-    elif 'synth' in filename_lower or 'sound-mixer' in filename_lower:
-        return 'synth'
-    elif 'instrum' in filename_lower or 'mixing-table' in filename_lower:
-        return 'instrum'
-    elif 'vocals' in filename_lower or 'microphone' in filename_lower:
-        return 'vocals'
-    else:
-        return 'other'
+    for track_type in track_types:
+        for keyword in track_type["keywords"]:
+            if keyword.lower() in filename_lower:
+                return track_type
+    # If no match found, return default
+    return {
+        "type": "default",
+        "icon": default_icon_filename,
+        "color": default_color
+    }
 
 def find_common_words(filenames):
     """Find the common words in the list of filenames, preserving order."""
@@ -169,9 +160,14 @@ def load_sound_files():
             if not label_without_common.strip():
                 label_without_common = 'Track'
 
-            track_type = get_track_type(label_without_common)
+            # Get track type information from JSON config
+            track_type_info = get_track_type(label_without_common)
+            track_type = track_type_info["type"]
+            icon_filename = track_type_info["icon"]
+            color = track_type_info["color"]
+
             # Load icon image
-            icon_path = track_type_icons.get(track_type, os.path.join(icon_location, 'music-notes.png'))
+            icon_path = os.path.join(icon_location, icon_filename)
             icon_image = pygame.image.load(icon_path).convert_alpha()
             # Scale icon to fit in the box
             icon_size = (64, 64)
@@ -185,6 +181,7 @@ def load_sound_files():
                 'type': track_type,
                 'icon': icon_image,
                 'volume': 1.0,  # Initialize volume at 100%
+                'color': color  # Store color from JSON
             })
             mute_flags.append(False)  # Initially, all tracks are unmuted
             if duration > max_duration:
@@ -319,7 +316,7 @@ def recolor_icon(icon_image, color):
     tinted_icon.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGB_MULT)
 
     # Add the desired color to the image
-    tinted_icon.fill(color + (0,), special_flags=pygame.BLEND_RGB_ADD)
+    tinted_icon.fill(color + [0], special_flags=pygame.BLEND_RGB_ADD)
 
     return tinted_icon
 
@@ -340,21 +337,6 @@ def draw_tracks():
     columns = max(1, (SCREEN_WIDTH - padding * 2) // (box_width + padding))
     rows = (num_tracks + columns - 1) // columns
 
-    # Define background colors based on track type
-    track_colors = {
-        'vocals': (218, 43, 56),  # Hex da2b38
-        'other': (214, 192, 4),   # Hex d6c004
-        'bass': (62, 169, 40),    # Hex 3ea928
-        'instrum': (75, 0, 130)   # Indigo color for instrument
-    }
-
-    # Assign the same color to multiple track types
-    for track_type in ['drums', 'percussion']:
-        track_colors[track_type] = (0, 137, 195)  # Hex 0089c3
-
-    for track_type in ['guitar', 'piano', 'synth']:
-        track_colors[track_type] = (128, 0, 128)  # Purple color
-
     for idx, track in enumerate(tracks):
         row = idx // columns
         col = idx % columns
@@ -363,11 +345,10 @@ def draw_tracks():
         rect = pygame.Rect(x, current_y, box_width, box_height)
         track['rect'] = rect  # Store rect in track dict
 
-        # Determine background color based on track type
-        track_type = track['type']
-        color = track_colors.get(track_type, (150, 150, 150))  # Default to gray if type is not defined
+        # Get color from track data
+        color = track['color']
         if mute_flags[idx]:
-            color = tuple(max(0, c - 50) for c in color)  # Darken color if muted
+            color = [max(0, c - 50) for c in color]  # Darken color if muted
 
         # Draw background
         pygame.draw.rect(screen, color, rect)
@@ -383,10 +364,10 @@ def draw_tracks():
         # Tint the icon based on whether the track is active or inactive
         if not mute_flags[idx]:
             # Active track: recolor the icon to white
-            tinted_icon = recolor_icon(icon_image, (255, 255, 255))
+            tinted_icon = recolor_icon(icon_image, [255, 255, 255])
         else:
             # Inactive track: recolor the icon to black
-            tinted_icon = recolor_icon(icon_image, (0, 0, 0))
+            tinted_icon = recolor_icon(icon_image, [0, 0, 0])
 
         screen.blit(tinted_icon, icon_rect)
 
