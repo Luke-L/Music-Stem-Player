@@ -4,14 +4,15 @@ import os
 from pygame.locals import *
 from tkinter import Tk
 from tkinter import filedialog, messagebox
+from math import inf
 import sounddevice as sd
 import soundfile as sf
 import numpy as np
 import threading
 import json
 
-# v1.4.1
-# Implemented hierarchical track categorization based on file name specificity.
+# v1.4.2
+# Slight refactor of code, attemps to fix solo mode bug to no avail.
 
 # Initialize Pygame
 pygame.init()
@@ -42,62 +43,37 @@ show_title = True
 show_full_labels = False  # Set to False by default as per your requirement
 use_title_case_labels = True
 
-# Load track type configurations from JSON file
-script_dir = os.path.dirname(os.path.abspath(__file__))
-config_file = os.path.join(script_dir, "track_types.json")
-with open(config_file, "r") as f:
-    config_data = json.load(f)
 
-track_types = config_data["track_types"]
-default_icon_filename = config_data.get("default_icon", "music-notes.png")
-default_color = config_data.get("default_color", [150, 150, 150])
+def assign_order_indices(categories, start_index=0):
+    """Assign order indices to categories based on their position."""
+    current_index = start_index
 
-# Adjust the icon_location to point to your icons directory relative to the script directory
-icon_location = os.path.join(script_dir, "icons")
+    for category_name, category_data in categories.items():
+        # Assign the current index to this category
+        category_data['order'] = current_index
+        current_index += 1
 
-# UI Elements
-MENU_BAR_HEIGHT = 40
-PLAY_BUTTON_SIZE = 50
-
-# Dictionary to hold UI element rectangles for interaction
-ui_elements = {}
-
-# Load play and pause button images or create simple shapes
-play_button_image = pygame.Surface((PLAY_BUTTON_SIZE, PLAY_BUTTON_SIZE), pygame.SRCALPHA)
-pygame.draw.polygon(play_button_image, (0, 255, 0), [(15, 10), (15, 40), (40, 25)])
-
-pause_button_image = pygame.Surface((PLAY_BUTTON_SIZE, PLAY_BUTTON_SIZE), pygame.SRCALPHA)
-pygame.draw.rect(pause_button_image, (255, 0, 0), (15, 10, 10, 30))
-pygame.draw.rect(pause_button_image, (255, 0, 0), (30, 10, 10, 30))
-
-# State variables for solo mode
-rmb_pressed = False
-prev_mute_flags = []
-soloed_track_idx = None
-
-# State variables for volume adjustment
-adjusting_volume = False
-volume_adjust_track_idx = None
-initial_mouse_y = None
-click_detected = False
+        # Recursively assign order indices to subcategories
+        subcategories = category_data.get("subcategories", {})
+        if subcategories:
+            current_index = assign_order_indices(subcategories, current_index)
+    return current_index
 
 def get_track_type(filename, categories):
     """Determine the track type based on keywords in the filename."""
     filename_lower = filename.lower()
-    best_match = None
-    best_match_level = -1
     best_match_data = None
+    best_match_level = -1
 
     def traverse_categories(categories, level=0):
-        nonlocal best_match, best_match_level, best_match_data
+        nonlocal best_match_data, best_match_level
         for category_name, category_data in categories.items():
             # Check for keywords match
             for keyword in category_data.get("keywords", []):
                 if keyword.lower() in filename_lower:
                     if level > best_match_level:
-                        best_match = category_name
-                        best_match_level = level
                         best_match_data = category_data
+                        best_match_level = level
             # Recursively check subcategories
             subcategories = category_data.get("subcategories", {})
             if subcategories:
@@ -107,13 +83,12 @@ def get_track_type(filename, categories):
     if best_match_data:
         return best_match_data
     else:
-        # Return default
+        # Return default with a high order index to place it at the end
         return {
-            "type": "default",
             "icon": default_icon_filename,
-            "color": default_color
+            "color": default_color,
+            "order": float('inf')  # Default tracks will be placed at the end
         }
-
 
 def find_common_words(filenames):
     """Find the common words in the list of filenames, preserving order."""
@@ -165,10 +140,10 @@ def load_sound_files():
             # Read audio file
             data, samplerate = sf.read(file_path, dtype='float32')
             if len(data.shape) == 1:
-                # Convert mono (shape: [num_samples,]) to stereo (shape: [num_samples, 2]) by duplicating the channel
+                # Convert mono to stereo by duplicating the channel
                 data = np.stack((data, data), axis=1)
             elif data.shape[1] == 1:
-                # If data has shape [num_samples, 1], duplicate the channel to make it stereo
+                # Duplicate the channel to make it stereo
                 data = np.repeat(data, 2, axis=1)
 
             duration = len(data) / samplerate
@@ -189,6 +164,7 @@ def load_sound_files():
             track_type_info = get_track_type(label_without_common, track_types)
             icon_filename = track_type_info["icon"]
             color = track_type_info["color"]
+            order_index = track_type_info.get("order", float('inf'))  # Use 'inf' if 'order' is missing
 
             # Load icon image
             icon_path = os.path.join(icon_location, icon_filename)
@@ -204,13 +180,17 @@ def load_sound_files():
                 'label_without_common': label_without_common,
                 'icon': icon_image,
                 'volume': 1.0,  # Initialize volume at 100%
-                'color': color  # Store color from JSON
+                'color': color,  # Store color from JSON
+                'order': order_index  # Include the 'order' key
             })
             mute_flags.append(False)  # Initially, all tracks are unmuted
             if duration > max_duration:
                 max_duration = duration
         except Exception as e:
             print(f"Could not load sound file {file_path}: {e}")
+
+    # Sort tracks based on the 'order' value
+    tracks.sort(key=lambda t: t['order'])
     total_duration = max_duration
     playback_position = 0  # Reset playback position
     playing = False
@@ -524,6 +504,51 @@ def play_audio():
             threading.Event().wait(0.1)
 
     playing = False
+
+# Main Code Execution
+if __name__ == "__main__":
+    # Load track type configurations from JSON file
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_file = os.path.join(script_dir, "track_types.json")
+    with open(config_file, "r") as f:
+        config_data = json.load(f)
+
+    track_types = config_data["track_types"]  # Hierarchical dictionary
+
+    # Assign order indices to track types
+    assign_order_indices(track_types)
+
+    default_icon_filename = config_data.get("default_icon", "music-notes.png")
+    default_color = config_data.get("default_color", [150, 150, 150])
+
+    # Adjust the icon_location to point to your icons directory relative to the script directory
+    icon_location = os.path.join(script_dir, "icons")
+
+    # UI Elements
+    MENU_BAR_HEIGHT = 40
+    PLAY_BUTTON_SIZE = 50
+
+    # Dictionary to hold UI element rectangles for interaction
+    ui_elements = {}
+
+    # Load play and pause button images or create simple shapes
+    play_button_image = pygame.Surface((PLAY_BUTTON_SIZE, PLAY_BUTTON_SIZE), pygame.SRCALPHA)
+    pygame.draw.polygon(play_button_image, (0, 255, 0), [(15, 10), (15, 40), (40, 25)])
+
+    pause_button_image = pygame.Surface((PLAY_BUTTON_SIZE, PLAY_BUTTON_SIZE), pygame.SRCALPHA)
+    pygame.draw.rect(pause_button_image, (255, 0, 0), (15, 10, 10, 30))
+    pygame.draw.rect(pause_button_image, (255, 0, 0), (30, 10, 10, 30))
+
+    # State variables for solo mode
+    rmb_pressed = False
+    prev_mute_flags = []
+    soloed_track_idx = None
+
+    # State variables for volume adjustment
+    adjusting_volume = False
+    volume_adjust_track_idx = None
+    initial_mouse_y = None
+    click_detected = False
 
 running = True
 

@@ -8,6 +8,7 @@ Very basic error handling is included to catch exceptions when loading audio fil
     <summary>Attributions</summary>
     <ul>
         <li><a href="https://www.flaticon.com/free-icons/drum" title="drum icons">Drum icons created by Smashicons - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/drum-set" title="drum set icons">Drum set icons created by Freepik - Flaticon</a></li>
         <li><a href="https://www.flaticon.com/free-icons/headstock" title="headstock icons">Headstock icons created by Smashicons - Flaticon</a></li>
         <li><a href="https://www.flaticon.com/free-icons/mixer" title="mixer icons">Mixer icons created by Vitaly Gorbachev - Flaticon</a></li>
         <li><a href="https://www.flaticon.com/free-icons/microphone" title="microphone icons">Microphone icons created by sonnycandra - Flaticon</a></li>
@@ -16,6 +17,9 @@ Very basic error handling is included to catch exceptions when loading audio fil
         <li><a href="https://www.flaticon.com/free-icons/music" title="music icons">Music icons created by Freepik - Flaticon</a></li>
         <li><a href="https://www.flaticon.com/free-icons/radio" title="radio icons">Radio icons created by Freepik - Flaticon</a></li>
         <li><a href="https://www.flaticon.com/free-icons/piano" title="piano icons">Piano icons created by Freepik - Flaticon</a></li>
+        <li><a href="https://www.flaticon.com/free-icons/bass-drum" title="bass drum icons">Bass drum icons created by smashingstocks - Flaticon (modified by lukel)</a></li>
+        <li><a href="https://www.svgrepo.com/svg/204522/cymbals-cymbal" title="Cymbal Icon">Cymbals icon from SVG Repo</a></li>
+        <li><a href="https://www.svgrepo.com/svg/146146/group-filled-persons" title="Group Icon">Group icon from SVG Repo</a></li>   
     </ul>
 </details>
 
@@ -83,3 +87,5 @@ There are a few key binds right now to be aware of:
     - Adjusted icon_location to use the root/icons/ directory relative to the script, added specific track types for percussion instruments.
 - v1.4.1
     - Implemented hierarchical track categorization based on file name specificity.
+- v1.4.2
+    - Slight refactor of code, attemps to fix solo mode bug to no avail.

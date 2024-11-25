@@ -58,7 +58,7 @@
     },
     "drums": {
       "keywords": ["drums", "percussion"],
-      "icon": "drums.png",
+      "icon": "drum-set.png",
       "color": [0, 137, 195],
       "subcategories": {
         "snare": {
